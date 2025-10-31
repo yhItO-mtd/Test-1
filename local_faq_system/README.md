@@ -30,27 +30,51 @@
 - **ストレージ**: 10GB以上の空き容量
 - **CPU**: マルチコアCPU推奨（GPU不要）
 
-## セットアップ手順
+## クイックスタート（Windows）
+
+既にプロジェクトをダウンロード済みの場合、以下の手順で開始できます：
+
+```cmd
+rem 1. プロジェクトフォルダに移動（例）
+cd C:\Users\YourName\Test-1\local_faq_system
+
+rem 2. 仮想環境を作成
+python -m venv venv
+
+rem 3. 仮想環境を有効化
+venv\Scripts\activate
+
+rem 4. 依存ライブラリをインストール
+pip install -r requirements.txt
+
+rem 5. アプリケーションを起動
+streamlit run app.py
+```
+
+ブラウザで `http://localhost:8501` が開き、すぐに使い始められます（LLMなしモード）。
+
+## セットアップ手順（詳細）
 
 ### 1. Pythonのインストール
 
 Python 3.10以上がインストールされていることを確認してください。
 
-```bash
+**コマンドプロンプトで実行:**
+```cmd
 python --version
 ```
 
-### 2. プロジェクトのクローン
+### 2. プロジェクトディレクトリへ移動
 
-```bash
-git clone <repository-url>
+**コマンドプロンプトで実行:**
+```cmd
 cd local_faq_system
 ```
 
 ### 3. 仮想環境の作成と有効化
 
-**Windows:**
-```bash
+**Windows（コマンドプロンプト）:**
+```cmd
 python -m venv venv
 venv\Scripts\activate
 ```
@@ -63,11 +87,12 @@ source venv/bin/activate
 
 ### 4. 依存ライブラリのインストール
 
-```bash
+**コマンドプロンプトで実行:**
+```cmd
 pip install -r requirements.txt
 ```
 
-**注意**: `llama-cpp-python`のインストールに時間がかかる場合があります。
+**注意**: `llama-cpp-python`のインストールに時間がかかる場合があります（5-10分程度）。
 
 ### 5. LLMモデルのダウンロード
 
@@ -104,7 +129,8 @@ model_path = hf_hub_download(
 
 FAQマネージャーを実行して、ベクトルデータベースを初期構築します。
 
-```bash
+**コマンドプロンプトで実行:**
+```cmd
 python faq_manager.py
 ```
 
@@ -121,7 +147,8 @@ python faq_manager.py
 
 ### アプリケーションの起動
 
-```bash
+**コマンドプロンプトで実行:**
+```cmd
 streamlit run app.py
 ```
 
@@ -169,8 +196,8 @@ FAQデータを変更した後は、以下のいずれかの方法でデータ�
 **方法1: Streamlit UI から更新**
 - アプリケーション実行中にサイドバーの「FAQデータを更新」ボタンをクリック
 
-**方法2: コマンドラインから更新**
-```bash
+**方法2: コマンドプロンプトから更新**
+```cmd
 python faq_manager.py
 ```
 
@@ -213,7 +240,7 @@ LLMモデルの使用には約6-8GBのメモリが必要です。
 **エラー**: `登録FAQ数: 0件`
 
 **解決策**:
-```bash
+```cmd
 python faq_manager.py
 ```
 を実行して、データベースを再構築してください。
