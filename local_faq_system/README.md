@@ -32,11 +32,55 @@
 
 ## クイックスタート（Windows）
 
-既にプロジェクトをダウンロード済みの場合、以下の手順で開始できます：
+### ステップ1: プロジェクトのダウンロード
+
+#### 方法A: GitHubからZIPダウンロード（推奨・簡単）
+
+1. GitHubのリポジトリページにアクセス
+2. 緑色の「Code」ボタンをクリック
+3. 「Download ZIP」を選択
+4. ダウンロードしたZIPファイルを解凍
+5. 解凍したフォルダ内の `local_faq_system` フォルダを見つける
+
+#### 方法B: Gitを使ってクローン（Gitがインストール済みの場合）
 
 ```cmd
-rem 1. プロジェクトフォルダに移動（例）
-cd C:\Users\YourName\Test-1\local_faq_system
+rem 任意のフォルダで実行（例: C:\Users\YourName\）
+git clone https://github.com/YOUR_USERNAME/Test-1.git
+cd Test-1\local_faq_system
+```
+
+### ステップ2: セットアップと起動
+
+#### 簡単な方法: エクスプローラーから開く
+
+1. エクスプローラーで `local_faq_system` フォルダを開く
+2. フォルダ内の空白部分で **Shiftキーを押しながら右クリック**
+3. 「PowerShellウィンドウをここに開く」または「コマンドウィンドウをここで開く」を選択
+4. 以下のコマンドを順番に実行：
+
+```cmd
+rem 仮想環境を作成
+python -m venv venv
+
+rem 仮想環境を有効化
+venv\Scripts\activate
+
+rem 依存ライブラリをインストール（初回のみ、5-10分かかります）
+pip install -r requirements.txt
+
+rem アプリケーションを起動
+streamlit run app.py
+```
+
+#### コマンドプロンプトから実行する方法
+
+コマンドプロンプトを開いて、以下を実行：
+
+```cmd
+rem 1. プロジェクトフォルダに移動（解凍した場所に合わせてパスを変更）
+rem    例: C:\Users\yuhi2009\Downloads\Test-1\local_faq_system
+cd パス\to\local_faq_system
 
 rem 2. 仮想環境を作成
 python -m venv venv
@@ -44,14 +88,18 @@ python -m venv venv
 rem 3. 仮想環境を有効化
 venv\Scripts\activate
 
-rem 4. 依存ライブラリをインストール
+rem 4. 依存ライブラリをインストール（初回のみ、5-10分かかります）
 pip install -r requirements.txt
 
 rem 5. アプリケーションを起動
 streamlit run app.py
 ```
 
-ブラウザで `http://localhost:8501` が開き、すぐに使い始められます（LLMなしモード）。
+**ヒント**:
+- `cd` コマンドで移動する代わりに、エクスプローラーでフォルダを開いてから右クリックする方が簡単です
+- 仮想環境が有効化されると `(venv)` が表示されます
+
+ブラウザで `http://localhost:8501` が自動的に開き、すぐに使い始められます（LLMなしモード）。
 
 ## セットアップ手順（詳細）
 
