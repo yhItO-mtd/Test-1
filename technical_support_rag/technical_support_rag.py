@@ -73,32 +73,65 @@ if "ocr_enabled" not in st.session_state:
 # Model setup
 # ---------------------------------------------------------------------------
 
+# Ollama models suitable for bilingual (Japanese + English) technical support.
+# The dict value is a short description shown in the UI.
+AVAILABLE_MODELS: dict[str, str] = {
+    "qwen2.5:7b": "Qwen 2.5 7B — 日英バランス型（推奨・VRAM 5GB）",
+    "qwen2.5:14b": "Qwen 2.5 14B — 高精度（VRAM 10GB）",
+    "gemma2:9b": "Gemma 2 9B — 多言語対応（VRAM 7GB）",
+    "llama3.1:8b": "Llama 3.1 8B — 英語中心（日本語は弱い）",
+}
+
+DEFAULT_MODEL = "qwen2.5:7b"
+
+if "selected_model" not in st.session_state:
+    st.session_state.selected_model = DEFAULT_MODEL
+
+SYSTEM_PROMPT = (
+    "You are a technical support AI specialised in product documentation.\n"
+    "Follow these rules:\n"
+    "1. Use ONLY information from the provided documents.\n"
+    "2. If the answer is not in the documents, say so clearly.\n"
+    "3. Cite specific page numbers or sections.\n"
+    "4. Use technical terms accurately.\n"
+    "5. Reply in the same language as the user's question "
+    "(Japanese or English).\n\n"
+    "あなたは製品ドキュメント専門の技術サポートAIです。\n"
+    "以下のルールに従ってください：\n"
+    "1. 提供された文書の情報のみを使用する\n"
+    "2. 不明な場合は「文書に記載がありません」と明示する\n"
+    "3. 具体的なページ番号や章を引用する\n"
+    "4. 技術用語は正確に使用する\n"
+    "5. ユーザーの質問と同じ言語（日本語または英語）で回答する"
+)
+
+
 @st.cache_resource
-def setup_models():
-    """Initialise embedding model and LLM (cached across reruns)."""
+def setup_embedding():
+    """Initialise embedding model (cached, model-independent)."""
     Settings.embed_model = HuggingFaceEmbedding(
         model_name="intfloat/multilingual-e5-large",
         cache_folder="./models",
     )
-    Settings.llm = Ollama(
-        model="llama3.1:8b",
-        request_timeout=300.0,
-        temperature=0.0,
-        system_prompt=(
-            "あなたは製品の技術サポート専門AIです。\n"
-            "以下のルールに従ってください：\n"
-            "1. 提供された文書の情報のみを使用する\n"
-            "2. 不明な場合は「文書に記載がありません」と回答\n"
-            "3. 具体的なページ番号や章を引用する\n"
-            "4. 技術用語は正確に使用する\n"
-            "5. 簡潔で分かりやすく回答する"
-        ),
-    )
     return True
 
 
+@st.cache_resource
+def setup_llm(model_name: str):
+    """Initialise the Ollama LLM for *model_name* (cached per model)."""
+    llm = Ollama(
+        model=model_name,
+        request_timeout=300.0,
+        temperature=0.0,
+        system_prompt=SYSTEM_PROMPT,
+    )
+    Settings.llm = llm
+    return llm
+
+
 try:
-    setup_models()
+    setup_embedding()
+    setup_llm(st.session_state.selected_model)
     _models_ok = True
 except Exception as exc:
     _models_ok = False
@@ -263,6 +296,34 @@ with st.sidebar:
             "スキャンPDFに対応するには Tesseract をインストールしてください。"
         )
         st.session_state.ocr_enabled = False
+
+    st.divider()
+
+    # --- LLM model selection --------------------------------------------
+    st.subheader("LLM モデル")
+    model_labels = [f"{k}  ({v})" for k, v in AVAILABLE_MODELS.items()]
+    model_keys = list(AVAILABLE_MODELS.keys())
+    current_idx = (
+        model_keys.index(st.session_state.selected_model)
+        if st.session_state.selected_model in model_keys
+        else 0
+    )
+    chosen_label = st.selectbox(
+        "使用モデル",
+        model_labels,
+        index=current_idx,
+        help="ollama pull <モデル名> でダウンロード済みのモデルを選択してください",
+    )
+    chosen_model = model_keys[model_labels.index(chosen_label)]
+
+    if chosen_model != st.session_state.selected_model:
+        st.session_state.selected_model = chosen_model
+        # Re-initialise LLM with the new model
+        try:
+            setup_llm(chosen_model)
+            st.success(f"モデルを {chosen_model} に切り替えました")
+        except Exception as exc:
+            st.error(f"モデル切替エラー: {exc}")
 
     st.divider()
 
