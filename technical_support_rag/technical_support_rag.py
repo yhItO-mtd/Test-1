@@ -2,18 +2,23 @@
 """
 Technical Support RAG System - Streamlit Application
 
-Documents (PDF, DOCX, PPTX, TXT) are uploaded, indexed with LlamaIndex,
-and queried via a local Ollama LLM. All processing runs offline.
+PDF documents (including scanned / image-based) are uploaded, indexed with
+LlamaIndex, and queried via a local Ollama LLM. All processing runs offline.
+
+OCR pipeline:
+  PyMuPDF (fitz)  -- extract embedded text per page
+  pytesseract     -- OCR for pages where extracted text is too short
+  Pillow          -- image handling between fitz and tesseract
 """
 import shutil
 import json
 from datetime import datetime
+from io import BytesIO
 from pathlib import Path
 
 import streamlit as st
-import PyPDF2
-import docx
-from pptx import Presentation
+import fitz  # PyMuPDF
+from PIL import Image
 from llama_index.core import (
     VectorStoreIndex,
     Document,
@@ -23,6 +28,18 @@ from llama_index.core import (
 )
 from llama_index.embeddings.huggingface import HuggingFaceEmbedding
 from llama_index.llms.ollama import Ollama
+
+# ---------------------------------------------------------------------------
+# OCR availability check
+# ---------------------------------------------------------------------------
+try:
+    import pytesseract
+
+    # Quick sanity check – will raise if the tesseract binary is missing
+    pytesseract.get_tesseract_version()
+    OCR_AVAILABLE = True
+except Exception:
+    OCR_AVAILABLE = False
 
 # ---------------------------------------------------------------------------
 # Page config
@@ -49,6 +66,8 @@ if "documents" not in st.session_state:
 # Cache extracted document parts so we never lose them across Streamlit reruns
 if "doc_parts_cache" not in st.session_state:
     st.session_state.doc_parts_cache = {}  # filename -> list of part dicts
+if "ocr_enabled" not in st.session_state:
+    st.session_state.ocr_enabled = OCR_AVAILABLE
 
 # ---------------------------------------------------------------------------
 # Model setup
@@ -86,70 +105,97 @@ except Exception as exc:
     st.error(f"モデル初期化エラー: {exc}")
 
 # ---------------------------------------------------------------------------
-# File extraction helpers
+# PDF extraction helpers (PyMuPDF + optional OCR)
 # ---------------------------------------------------------------------------
 
-def extract_text_from_pdf(file) -> list[dict]:
-    """Extract per-page text from a PDF."""
-    pdf_reader = PyPDF2.PdfReader(file)
-    documents = []
-    for page_num, page in enumerate(pdf_reader.pages, 1):
-        text = page.extract_text()
+# Minimum number of characters on a page before we consider OCR.
+# Pages with fewer characters than this are likely scanned images.
+_OCR_CHAR_THRESHOLD = 30
+
+# DPI used when rendering a PDF page to an image for OCR.
+_OCR_DPI = 300
+
+
+def _ocr_page_image(page: fitz.Page) -> str:
+    """Render a PDF page to an image and run Tesseract OCR on it."""
+    # Render at high DPI for better OCR accuracy
+    zoom = _OCR_DPI / 72  # 72 is the default PDF DPI
+    mat = fitz.Matrix(zoom, zoom)
+    pix = page.get_pixmap(matrix=mat, alpha=False)
+
+    img = Image.open(BytesIO(pix.tobytes("png")))
+    text = pytesseract.image_to_string(img, lang="jpn+eng")
+    return text
+
+
+def extract_text_from_pdf(
+    file,
+    *,
+    use_ocr: bool = False,
+    progress_callback=None,
+) -> list[dict]:
+    """Extract per-page text from a PDF using PyMuPDF.
+
+    If *use_ocr* is True and Tesseract is available, pages whose embedded text
+    is shorter than ``_OCR_CHAR_THRESHOLD`` characters are OCR-ed automatically.
+    A *progress_callback(current, total)* can be supplied for UI feedback.
+    """
+    pdf_bytes = file.read()
+    doc = fitz.open(stream=pdf_bytes, filetype="pdf")
+    total_pages = len(doc)
+    documents: list[dict] = []
+
+    for page_idx in range(total_pages):
+        page = doc[page_idx]
+        page_num = page_idx + 1
+
+        # --- embedded text extraction (fast) ---
+        text = page.get_text("text")
+        extraction_method = "text"
+
+        # --- OCR fallback for image-heavy / scanned pages ---
+        if (
+            use_ocr
+            and OCR_AVAILABLE
+            and len(text.strip()) < _OCR_CHAR_THRESHOLD
+        ):
+            try:
+                ocr_text = _ocr_page_image(page)
+                if ocr_text and len(ocr_text.strip()) > len(text.strip()):
+                    text = ocr_text
+                    extraction_method = "ocr"
+            except Exception:
+                pass  # keep the (possibly empty) embedded text
+
+        if progress_callback is not None:
+            progress_callback(page_num, total_pages)
+
         if text and text.strip():
             documents.append(
                 {
                     "text": text,
                     "metadata": {
                         "page": page_num,
-                        "total_pages": len(pdf_reader.pages),
+                        "total_pages": total_pages,
+                        "extraction_method": extraction_method,
                     },
                 }
             )
+
+    doc.close()
     return documents
 
 
-def extract_text_from_docx(file) -> list[dict]:
-    """Extract text from a Word document."""
-    doc = docx.Document(file)
-    text = "\n".join(para.text for para in doc.paragraphs if para.text.strip())
-    if not text.strip():
-        return []
-    return [{"text": text, "metadata": {}}]
-
-
-def extract_text_from_pptx(file) -> list[dict]:
-    """Extract per-slide text from a PowerPoint file."""
-    prs = Presentation(file)
-    documents = []
-    for slide_num, slide in enumerate(prs.slides, 1):
-        text_parts = [
-            shape.text
-            for shape in slide.shapes
-            if hasattr(shape, "text") and shape.text.strip()
-        ]
-        if text_parts:
-            documents.append(
-                {
-                    "text": "\n".join(text_parts),
-                    "metadata": {
-                        "slide": slide_num,
-                        "total_slides": len(prs.slides),
-                    },
-                }
-            )
-    return documents
-
-
-def load_document(uploaded_file) -> list[dict] | None:
-    """Dispatch to the correct extractor based on file extension."""
+def load_document(uploaded_file, *, use_ocr: bool = False, progress_callback=None) -> list[dict] | None:
+    """Load a PDF (or plain-text) file and return extracted parts."""
     ext = Path(uploaded_file.name).suffix.lower()
     try:
         if ext == ".pdf":
-            return extract_text_from_pdf(uploaded_file)
-        elif ext == ".docx":
-            return extract_text_from_docx(uploaded_file)
-        elif ext == ".pptx":
-            return extract_text_from_pptx(uploaded_file)
+            return extract_text_from_pdf(
+                uploaded_file,
+                use_ocr=use_ocr,
+                progress_callback=progress_callback,
+            )
         elif ext == ".txt":
             text = uploaded_file.read().decode("utf-8")
             if not text.strip():
@@ -204,7 +250,23 @@ def _build_index_from_cache() -> VectorStoreIndex | None:
 with st.sidebar:
     st.header("ナレッジベース管理")
 
-    # Load persisted index
+    # --- OCR settings ---------------------------------------------------
+    if OCR_AVAILABLE:
+        st.session_state.ocr_enabled = st.checkbox(
+            "OCR を有効にする（スキャンPDF対応）",
+            value=st.session_state.ocr_enabled,
+            help="テキストが埋め込まれていないスキャン画像ページを自動認識し、OCRでテキスト化します",
+        )
+    else:
+        st.warning(
+            "Tesseract が見つかりません。OCR は無効です。\n\n"
+            "スキャンPDFに対応するには Tesseract をインストールしてください。"
+        )
+        st.session_state.ocr_enabled = False
+
+    st.divider()
+
+    # --- Load persisted index -------------------------------------------
     if STORAGE_DIR.exists() and st.session_state.index is None:
         if st.button("保存済みデータを読み込む"):
             with st.spinner("読み込み中..."):
@@ -222,12 +284,12 @@ with st.sidebar:
 
     st.divider()
 
-    # File uploader
+    # --- File uploader --------------------------------------------------
     uploaded_files = st.file_uploader(
-        "文書をアップロード",
-        type=["pdf", "docx", "pptx", "txt"],
+        "PDF文書をアップロード",
+        type=["pdf", "txt"],
         accept_multiple_files=True,
-        help="取扱説明書、セミナー資料、アプリケーションノート等",
+        help="取扱説明書、セミナー資料、アプリケーションノート等（PDF推奨）",
     )
 
     if uploaded_files:
@@ -236,15 +298,38 @@ with st.sidebar:
         for uploaded_file in uploaded_files:
             fname = uploaded_file.name
             if fname in st.session_state.doc_parts_cache:
-                # Already processed
                 continue
 
-            # Reset stream position so the extractor reads from the start
             uploaded_file.seek(0)
-            doc_parts = load_document(uploaded_file)
+
+            # Progress bar for PDF extraction (OCR can be slow)
+            progress_placeholder = st.empty()
+            status_placeholder = st.empty()
+
+            def _progress(current: int, total: int):
+                progress_placeholder.progress(
+                    current / total,
+                    text=f"読み取り中: {fname} ({current}/{total} ページ)",
+                )
+
+            use_ocr = st.session_state.ocr_enabled
+            if use_ocr and Path(fname).suffix.lower() == ".pdf":
+                status_placeholder.info(f"OCR有効で処理中: {fname}")
+
+            doc_parts = load_document(
+                uploaded_file,
+                use_ocr=use_ocr,
+                progress_callback=_progress if Path(fname).suffix.lower() == ".pdf" else None,
+            )
+
+            progress_placeholder.empty()
+            status_placeholder.empty()
 
             if doc_parts:
-                # Cache the extracted parts in session state so they survive reruns
+                # Count how many pages used OCR
+                ocr_pages = sum(
+                    1 for p in doc_parts if p["metadata"].get("extraction_method") == "ocr"
+                )
                 st.session_state.doc_parts_cache[fname] = doc_parts
                 st.session_state.documents.append(
                     {
@@ -252,6 +337,7 @@ with st.sidebar:
                         "type": Path(fname).suffix[1:].upper(),
                         "uploaded_at": datetime.now().isoformat(),
                         "parts": len(doc_parts),
+                        "ocr_pages": ocr_pages,
                     }
                 )
                 new_docs_added = True
@@ -263,15 +349,18 @@ with st.sidebar:
                     st.session_state.index = idx
                     st.success(f"{len(st.session_state.documents)}件の文書を登録")
 
-    # Registered documents
+    # --- Registered documents -------------------------------------------
     if st.session_state.documents:
         st.subheader("登録済み文書")
-        _icons = {"PDF": "📕", "DOCX": "📘", "PPTX": "📊", "TXT": "📄"}
+        _icons = {"PDF": "📕", "TXT": "📄"}
         for doc in st.session_state.documents:
             icon = _icons.get(doc["type"], "📄")
             st.text(f"{icon} {doc['name']}")
-            if "parts" in doc:
-                st.caption(f"   {doc['parts']}セクション")
+            parts_label = f"   {doc['parts']}ページ"
+            ocr_count = doc.get("ocr_pages", 0)
+            if ocr_count > 0:
+                parts_label += f"（うちOCR: {ocr_count}ページ）"
+            st.caption(parts_label)
 
         st.divider()
 
@@ -300,12 +389,10 @@ for message in st.session_state.chat_history:
                 for i, source in enumerate(message["sources"], 1):
                     st.markdown(f"**[{i}] {source['file_name']}**")
                     if source.get("page"):
+                        method = source.get("extraction_method", "text")
+                        method_label = " [OCR]" if method == "ocr" else ""
                         st.info(
-                            f"ページ {source['page']}/{source.get('total_pages', '?')}"
-                        )
-                    elif source.get("slide"):
-                        st.info(
-                            f"スライド {source['slide']}/{source.get('total_slides', '?')}"
+                            f"ページ {source['page']}/{source.get('total_pages', '?')}{method_label}"
                         )
                     if source.get("score") is not None:
                         st.caption(f"関連度: {source['score']:.3f}")
@@ -378,9 +465,8 @@ if st.session_state.index is not None:
                             "file_name": node.metadata.get("file_name", "unknown"),
                             "file_type": node.metadata.get("file_type", ""),
                             "page": node.metadata.get("page"),
-                            "slide": node.metadata.get("slide"),
                             "total_pages": node.metadata.get("total_pages"),
-                            "total_slides": node.metadata.get("total_slides"),
+                            "extraction_method": node.metadata.get("extraction_method", "text"),
                             "score": node.score,
                             "text": node.text,
                         }
@@ -391,12 +477,10 @@ if st.session_state.index is not None:
                         for i, source in enumerate(sources, 1):
                             st.markdown(f"**[{i}] {source['file_name']}**")
                             if source.get("page"):
+                                method = source.get("extraction_method", "text")
+                                method_label = " [OCR]" if method == "ocr" else ""
                                 st.info(
-                                    f"ページ {source['page']}/{source.get('total_pages', '?')}"
-                                )
-                            elif source.get("slide"):
-                                st.info(
-                                    f"スライド {source['slide']}/{source.get('total_slides', '?')}"
+                                    f"ページ {source['page']}/{source.get('total_pages', '?')}{method_label}"
                                 )
                             if source.get("score") is not None:
                                 st.caption(f"関連度: {source['score']:.3f}")
@@ -422,18 +506,20 @@ else:
     st.info("サイドバーから取扱説明書やセミナー資料をアップロードしてください")
 
     st.markdown(
-        """
+        f"""
 ### 使い方
 
-1. **文書をアップロード**: PDF、Word、PowerPoint形式の技術文書
+1. **PDFをアップロード**: サイドバーから取扱説明書や技術資料を登録
 2. **質問を入力**: 製品仕様、操作方法、トラブル対処など
-3. **回答を確認**: 参照元の原文も確認できます
+3. **回答を確認**: 参照元のページ番号・原文も確認できます
 
-### 対応文書
-- 📕 取扱説明書（PDF）
-- 📊 セミナー資料（PPTX）
-- 📘 アプリケーションノート（Word/PDF）
-- 📄 技術資料（TXT）
+### 対応ファイル
+- 📕 PDF（テキスト埋め込み / スキャン画像どちらも対応）
+- 📄 テキストファイル（TXT）
+
+### OCR 状態
+- Tesseract: **{"利用可能" if OCR_AVAILABLE else "未インストール"}**
+{("- スキャンPDFや画像ベースのPDFも自動でテキスト化されます" if OCR_AVAILABLE else "- スキャンPDFに対応するには [Tesseract](https://github.com/tesseract-ocr/tesseract) をインストールしてください")}
 """
     )
 
