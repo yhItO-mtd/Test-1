@@ -1,7 +1,7 @@
 @echo off
 chcp 65001 >nul
 echo ============================================
-echo  Technical Support AI - Setup
+echo  Technical Support AI - Setup (CPU版)
 echo ============================================
 echo.
 
@@ -65,15 +65,15 @@ if errorlevel 1 (
     echo [WARNING] Ollama が見つかりません。
     echo https://ollama.ai/download からインストールしてください。
     echo インストール後、以下を実行してください:
-    echo   ollama pull qwen2.5:7b
+    echo   ollama pull qwen2.5:3b
     pause
     exit /b 0
 )
 
 echo.
-echo 推奨モデル (qwen2.5:7b) をダウンロード中...
-echo （日英バイリンガル対応・約4.7GB）
-ollama pull qwen2.5:7b
+echo CPU推奨モデル (qwen2.5:3b) をダウンロード中...
+echo （日英バイリンガル対応・約2GB）
+ollama pull qwen2.5:3b
 
 echo.
 echo ============================================
@@ -81,8 +81,8 @@ echo  セットアップ完了
 echo  run.bat をダブルクリックして起動してください
 echo.
 echo  他のモデルも使用可能です（サイドバーで切替）:
-echo    ollama pull qwen2.5:14b    (高精度、約9GB)
-echo    ollama pull gemma2:9b      (多言語、約5.4GB)
-echo    ollama pull llama3.1:8b    (英語中心、約4.7GB)
+echo    ollama pull qwen2.5:7b     (高品質、約4.7GB、RAM 8GB推奨)
+echo    ollama pull gemma2:2b      (最軽量、約1.6GB)
+echo    ollama pull llama3.2:3b    (英語中心、約2GB)
 echo ============================================
 pause

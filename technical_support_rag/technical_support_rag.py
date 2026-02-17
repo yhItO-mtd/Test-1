@@ -74,15 +74,15 @@ if "ocr_enabled" not in st.session_state:
 # ---------------------------------------------------------------------------
 
 # Ollama models suitable for bilingual (Japanese + English) technical support.
-# The dict value is a short description shown in the UI.
+# Sized for CPU-only environments — larger models are too slow without a GPU.
 AVAILABLE_MODELS: dict[str, str] = {
-    "qwen2.5:7b": "Qwen 2.5 7B — 日英バランス型（推奨・VRAM 5GB）",
-    "qwen2.5:14b": "Qwen 2.5 14B — 高精度（VRAM 10GB）",
-    "gemma2:9b": "Gemma 2 9B — 多言語対応（VRAM 7GB）",
-    "llama3.1:8b": "Llama 3.1 8B — 英語中心（日本語は弱い）",
+    "qwen2.5:3b": "Qwen 2.5 3B — CPU推奨・日英対応（RAM 4GB・約2GB）",
+    "qwen2.5:7b": "Qwen 2.5 7B — 高品質・CPU可（RAM 8GB・約4.7GB）",
+    "gemma2:2b": "Gemma 2 2B — 最軽量・多言語（RAM 3GB・約1.6GB）",
+    "llama3.2:3b": "Llama 3.2 3B — 英語中心（RAM 4GB・約2GB）",
 }
 
-DEFAULT_MODEL = "qwen2.5:7b"
+DEFAULT_MODEL = "qwen2.5:3b"
 
 if "selected_model" not in st.session_state:
     st.session_state.selected_model = DEFAULT_MODEL
@@ -109,8 +109,10 @@ SYSTEM_PROMPT = (
 @st.cache_resource
 def setup_embedding():
     """Initialise embedding model (cached, model-independent)."""
+    # e5-base: half the size of e5-large, practical on CPU-only machines.
+    # Still supports 100+ languages including Japanese and English.
     Settings.embed_model = HuggingFaceEmbedding(
-        model_name="intfloat/multilingual-e5-large",
+        model_name="intfloat/multilingual-e5-base",
         cache_folder="./models",
     )
     return True
