@@ -227,14 +227,19 @@ if st.session_state.index is None and Path(STORAGE_DIR).exists():
         if Path(METADATA_PATH).exists():
             with open(METADATA_PATH, "r", encoding="utf-8") as f:
                 st.session_state.documents = json.load(f)
-        if Path(CHAT_HISTORY_PATH).exists():
-            with open(CHAT_HISTORY_PATH, "r", encoding="utf-8") as f:
-                st.session_state.chat_history = json.load(f)
         # 全ソースを選択状態にする
         st.session_state.selected_sources = {
             d["name"] for d in st.session_state.documents
         }
     except Exception:
+        pass
+
+# チャット履歴の復元（インデックス読み込みとは独立して実行）
+if not st.session_state.chat_history and Path(CHAT_HISTORY_PATH).exists():
+    try:
+        with open(CHAT_HISTORY_PATH, "r", encoding="utf-8") as f:
+            st.session_state.chat_history = json.load(f)
+    except (json.JSONDecodeError, OSError):
         pass
 
 # selected_sources を documents と同期（stale な名前を除去）
@@ -740,7 +745,10 @@ if st.session_state.index is not None:
                 }
             )
 
-        persist_chat_history()
+        try:
+            persist_chat_history()
+        except OSError:
+            pass
         st.rerun()
 
 else:
