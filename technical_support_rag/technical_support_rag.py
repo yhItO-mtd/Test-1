@@ -644,6 +644,8 @@ with chat_col:
             with rc2:
                 if st.button("新しい会話で開始", use_container_width=True):
                     st.session_state.chat_history_offer = False
+                    if CHAT_HISTORY_FILE.exists():
+                        CHAT_HISTORY_FILE.unlink()
                     st.rerun()
         elif not st.session_state.chat_history and st.session_state.pending_query is None:
             st.caption("質問を入力すると、アップロード済み文書から回答します")
