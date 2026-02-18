@@ -1,9 +1,8 @@
 @echo off
-chcp 65001 >nul 2>&1
 cd /d "%~dp0"
 
 if not exist "venv\Scripts\activate" (
-    echo ã‚¨ãƒ©ãƒ¼: ä»®æƒ³ç’°å¢ƒãŒè¦‹ã¤ã‹ã‚Šã¾ã›ã‚“ã€‚å…ˆã« install.bat ã‚’å®Ÿè¡Œã—ã¦ãã ã•ã„ã€‚
+    echo ƒGƒ‰[: ‰¼‘zŠÂ‹«‚ªŒ©‚Â‚©‚è‚Ü‚¹‚ñBæ‚É install.bat ‚ğÀs‚µ‚Ä‚­‚¾‚³‚¢B
     pause
     exit /b 1
 )
@@ -12,6 +11,6 @@ call venv\Scripts\activate
 streamlit run technical_support_rag.py
 if errorlevel 1 (
     echo.
-    echo ã‚¨ãƒ©ãƒ¼ãŒç™ºç”Ÿã—ã¾ã—ãŸã€‚ä¸Šè¨˜ã®ãƒ¡ãƒƒã‚»ãƒ¼ã‚¸ã‚’ç¢ºèªã—ã¦ãã ã•ã„ã€‚
+    echo ƒGƒ‰[‚ª”­¶‚µ‚Ü‚µ‚½Bã‹L‚ÌƒƒbƒZ[ƒW‚ğŠm”F‚µ‚Ä‚­‚¾‚³‚¢B
     pause
 )
