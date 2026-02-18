@@ -444,6 +444,15 @@ with st.sidebar:
             progress_placeholder.empty()
             status_placeholder.empty()
 
+            if doc_parts is not None and len(doc_parts) == 0:
+                hint = ""
+                if not use_ocr and Path(fname).suffix.lower() == ".pdf":
+                    hint = " OCRを有効にすると読み取れる場合があります。"
+                st.warning(
+                    f"「{fname}」からテキストを抽出できませんでした。"
+                    f"白紙またはスキャン画像のみの可能性があります。{hint}"
+                )
+
             if doc_parts:
                 # Count how many pages used OCR
                 ocr_pages = sum(
@@ -799,7 +808,8 @@ st.divider()
 foot1, foot2, foot3 = st.columns(3)
 
 with foot1:
-    if st.button("会話履歴クリア"):
+    _has_chat = bool(st.session_state.chat_history) or st.session_state.chat_history_offer
+    if st.button("会話履歴クリア", disabled=not _has_chat):
         st.session_state.chat_history = []
         st.session_state.pending_query = None
         st.session_state.chat_history_offer = False
