@@ -39,6 +39,7 @@ except ImportError:
 BASE_DIR = Path(__file__).parent
 STORAGE_DIR = str(BASE_DIR / "storage")
 METADATA_PATH = str(BASE_DIR / "storage" / "metadata.json")
+CHAT_HISTORY_PATH = str(BASE_DIR / "storage" / "chat_history.json")
 MODELS_DIR = str(BASE_DIR / "models")
 
 # ---------------------------------------------------------------------------
@@ -226,6 +227,9 @@ if st.session_state.index is None and Path(STORAGE_DIR).exists():
         if Path(METADATA_PATH).exists():
             with open(METADATA_PATH, "r", encoding="utf-8") as f:
                 st.session_state.documents = json.load(f)
+        if Path(CHAT_HISTORY_PATH).exists():
+            with open(CHAT_HISTORY_PATH, "r", encoding="utf-8") as f:
+                st.session_state.chat_history = json.load(f)
         # 全ソースを選択状態にする
         st.session_state.selected_sources = {
             d["name"] for d in st.session_state.documents
@@ -339,6 +343,15 @@ def persist_index_and_metadata():
     with open(METADATA_PATH, "w", encoding="utf-8") as f:
         json.dump(
             st.session_state.documents, f, ensure_ascii=False, indent=2
+        )
+
+
+def persist_chat_history():
+    """チャット履歴をファイルに永続化する"""
+    os.makedirs(STORAGE_DIR, exist_ok=True)
+    with open(CHAT_HISTORY_PATH, "w", encoding="utf-8") as f:
+        json.dump(
+            st.session_state.chat_history, f, ensure_ascii=False, indent=2
         )
 
 
@@ -533,6 +546,13 @@ with st.sidebar:
             if Path(STORAGE_DIR).exists():
                 shutil.rmtree(STORAGE_DIR)
             st.rerun()
+        if st.session_state.chat_history and st.button(
+            "💬 会話をクリア", use_container_width=True
+        ):
+            st.session_state.chat_history = []
+            if Path(CHAT_HISTORY_PATH).exists():
+                os.remove(CHAT_HISTORY_PATH)
+            st.rerun()
 
 # ---------------------------------------------------------------------------
 # メインエリア
@@ -720,6 +740,7 @@ if st.session_state.index is not None:
                 }
             )
 
+        persist_chat_history()
         st.rerun()
 
 else:
