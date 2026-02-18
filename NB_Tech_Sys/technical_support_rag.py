@@ -23,6 +23,12 @@ import shutil
 import os
 from datetime import datetime
 
+# スクリプトの配置ディレクトリを基準に絶対パスを使用 (BUG-9)
+BASE_DIR = Path(__file__).parent
+STORAGE_DIR = str(BASE_DIR / "storage")
+METADATA_PATH = str(BASE_DIR / "storage" / "metadata.json")
+MODELS_DIR = str(BASE_DIR / "models")
+
 # ページ設定
 st.set_page_config(
     page_title="技術サポート AI",
@@ -38,9 +44,10 @@ if "chat_history" not in st.session_state:
     st.session_state.chat_history = []
 if "documents" not in st.session_state:
     st.session_state.documents = []
-
-STORAGE_DIR = "./storage"
-METADATA_PATH = os.path.join(STORAGE_DIR, "metadata.json")
+if "uploader_key" not in st.session_state:
+    st.session_state.uploader_key = 0
+if "failed_files" not in st.session_state:
+    st.session_state.failed_files = set()
 
 
 # モデル設定
@@ -49,7 +56,7 @@ def setup_models():
     """埋め込みモデルとLLMを初期化する"""
     Settings.embed_model = HuggingFaceEmbedding(
         model_name="intfloat/multilingual-e5-large",
-        cache_folder="./models",
+        cache_folder=MODELS_DIR,
     )
     Settings.llm = Ollama(
         model="llama3.1:8b",
@@ -68,7 +75,24 @@ def setup_models():
     return True
 
 
-setup_models()
+# 初回はモデルDLがあるためスピナーを表示 (BUG-7)
+with st.spinner("AIモデルを初期化中...（初回は数分かかります）"):
+    setup_models()
+
+# 保存済みインデックスの自動読み込み (BUG-19)
+# セッション開始時に自動で読み込み、手動ボタン不要にする
+if st.session_state.index is None and Path(STORAGE_DIR).exists():
+    try:
+        storage_context = StorageContext.from_defaults(
+            persist_dir=STORAGE_DIR
+        )
+        st.session_state.index = load_index_from_storage(storage_context)
+        if Path(METADATA_PATH).exists():
+            with open(METADATA_PATH, "r", encoding="utf-8") as f:
+                st.session_state.documents = json.load(f)
+    except Exception:
+        # ストレージが破損している場合はクリーンスタート
+        pass
 
 
 # ---------------------------------------------------------------------------
@@ -151,7 +175,10 @@ def load_document(uploaded_file):
             st.warning(f"未対応のファイル形式です: {file_extension}")
             return None
     except Exception as e:
-        st.error(f"ファイル読み込みエラー ({uploaded_file.name}): {e}")
+        st.error(
+            f"ファイルの読み込みに失敗しました: {uploaded_file.name}\n\n"
+            f"ファイルが破損していないか確認してください。（詳細: {e}）"
+        )
         return None
 
 
@@ -210,44 +237,49 @@ def persist_index_and_metadata():
 with st.sidebar:
     st.header("📚 ナレッジベース管理")
 
-    # 既存インデックスの読み込み
-    if Path(STORAGE_DIR).exists() and st.session_state.index is None:
-        if st.button("💾 保存済みデータを読み込む"):
-            with st.spinner("読み込み中..."):
-                try:
-                    storage_context = StorageContext.from_defaults(
-                        persist_dir=STORAGE_DIR
-                    )
-                    st.session_state.index = load_index_from_storage(
-                        storage_context
-                    )
-                    if Path(METADATA_PATH).exists():
-                        with open(METADATA_PATH, "r", encoding="utf-8") as f:
-                            st.session_state.documents = json.load(f)
-                    st.success("読み込み完了！")
-                except Exception as e:
-                    st.error(f"読み込みエラー: {e}")
-
-    st.divider()
-
-    # ファイルアップロード
+    # ファイルアップロード（動的 key でクリア時にリセット: BUG-20）
     uploaded_files = st.file_uploader(
         "文書をアップロード",
         type=["pdf", "docx", "pptx", "txt"],
         accept_multiple_files=True,
         help="取扱説明書、セミナー資料、アプリケーションノート等",
+        key=f"file_uploader_{st.session_state.uploader_key}",
     )
 
     if uploaded_files:
         # 新規文書を抽出（パース結果をキャッシュし、二重読み込みを防ぐ）
         registered_names = {d["name"] for d in st.session_state.documents}
         new_doc_parts = {}  # filename -> list of doc parts
+        no_text_files = []  # テキスト抽出できなかったファイル (BUG-12)
 
-        for uploaded_file in uploaded_files:
-            if uploaded_file.name not in registered_names:
+        # テキスト抽出フェーズにスピナーを表示 (BUG-26)
+        with st.spinner("文書を読み込み中..."):
+            for uploaded_file in uploaded_files:
+                name = uploaded_file.name
+                # 登録済み or 既に失敗したファイルはスキップ (BUG-11)
+                if name in registered_names:
+                    continue
+                if name in st.session_state.failed_files:
+                    continue
+
                 doc_parts = load_document(uploaded_file)
-                if doc_parts:
-                    new_doc_parts[uploaded_file.name] = doc_parts
+
+                if doc_parts is None:
+                    # パースエラー（例外発生）→ 再試行を防止
+                    st.session_state.failed_files.add(name)
+                elif len(doc_parts) == 0:
+                    # テキスト抽出不可（スキャンPDF等）
+                    no_text_files.append(name)
+                    st.session_state.failed_files.add(name)
+                else:
+                    new_doc_parts[name] = doc_parts
+
+        # テキスト抽出できなかったファイルをユーザーに通知 (BUG-12)
+        for name in no_text_files:
+            st.warning(
+                f"テキストを抽出できませんでした: {name}\n\n"
+                "スキャン画像のみのPDF等は対応していません。"
+            )
 
         # インデックスの構築 / 更新
         # NOTE: documents リストはインデックス構築成功後に更新する
@@ -297,6 +329,7 @@ with st.sidebar:
 
     # 登録文書一覧
     if st.session_state.documents:
+        st.divider()
         st.subheader("📂 登録済み文書")
         icon_map = {
             "PDF": "📕",
@@ -316,6 +349,8 @@ with st.sidebar:
             st.session_state.documents = []
             st.session_state.index = None
             st.session_state.chat_history = []
+            st.session_state.failed_files = set()
+            st.session_state.uploader_key += 1  # アップローダーをリセット (BUG-20)
             if Path(STORAGE_DIR).exists():
                 shutil.rmtree(STORAGE_DIR)
             st.rerun()
@@ -327,10 +362,13 @@ with st.sidebar:
 st.title("🔬 技術サポート AI")
 st.caption("取扱説明書・セミナー資料から自動回答")
 
-# チャット履歴表示
+# チャット履歴表示 (BUG-16/17: is_error フラグで表示を分岐)
 for idx, message in enumerate(st.session_state.chat_history):
     with st.chat_message(message["role"]):
-        st.markdown(message["content"])
+        if message.get("is_error"):
+            st.error(message["content"])
+        else:
+            st.markdown(message["content"])
         if message.get("sources"):
             display_sources(message["sources"], f"hist_{idx}")
 
@@ -432,7 +470,7 @@ if st.session_state.index is not None:
                     )
                 except Exception as e:
                     error_msg = (
-                        f"回答の生成中にエラーが発生しました: {e}\n\n"
+                        "回答の生成中にエラーが発生しました。\n\n"
                         "Ollama が起動しているか確認してください。"
                     )
                     st.error(error_msg)
@@ -440,6 +478,7 @@ if st.session_state.index is not None:
                         {
                             "role": "assistant",
                             "content": error_msg,
+                            "is_error": True,
                             "sources": [],
                             "timestamp": timestamp,
                         }
@@ -480,16 +519,23 @@ with col1:
 
 with col2:
     if st.session_state.chat_history:
-        export_data = {
-            "export_date": datetime.now().isoformat(),
-            "conversation": st.session_state.chat_history,
-        }
-        st.download_button(
-            "📥 会話をエクスポート",
-            json.dumps(export_data, ensure_ascii=False, indent=2),
-            f"conversation_{datetime.now().strftime('%Y%m%d_%H%M%S')}.json",
-            "application/json",
-        )
+        # エクスポート時にエラーメッセージを除外 (BUG-24)
+        export_history = [
+            msg
+            for msg in st.session_state.chat_history
+            if not msg.get("is_error")
+        ]
+        if export_history:
+            export_data = {
+                "export_date": datetime.now().isoformat(),
+                "conversation": export_history,
+            }
+            st.download_button(
+                "📥 会話をエクスポート",
+                json.dumps(export_data, ensure_ascii=False, indent=2),
+                f"conversation_{datetime.now().strftime('%Y%m%d_%H%M%S')}.json",
+                "application/json",
+            )
 
 with col3:
     if st.session_state.index:
