@@ -18,6 +18,7 @@ from pathlib import Path
 import PyPDF2
 import docx
 from pptx import Presentation
+import html
 import json
 import shutil
 import os
@@ -615,10 +616,11 @@ if st.session_state.index is not None:
                 score = src.get("score")
                 score_str = f" ({score:.0%})" if score is not None else ""
 
+                safe_name = html.escape(src["file_name"])
                 st.markdown(
                     f'<div class="ref-card">'
                     f'<span class="ref-title">[{i}] {icon} '
-                    f"{src['file_name']}</span><br>"
+                    f"{safe_name}</span><br>"
                     f'<span class="ref-meta">{loc}{score_str}</span>'
                     f"</div>",
                     unsafe_allow_html=True,
