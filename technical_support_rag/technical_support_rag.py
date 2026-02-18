@@ -54,6 +54,7 @@ st.set_page_config(
 
 STORAGE_DIR = Path("./storage")
 METADATA_FILE = STORAGE_DIR / "metadata.json"
+CHAT_HISTORY_FILE = STORAGE_DIR / "chat_history.json"
 
 # ---------------------------------------------------------------------------
 # Session state
@@ -73,6 +74,9 @@ if "ocr_enabled" not in st.session_state:
 # the user message first, then generate the answer on the next rerun.
 if "pending_query" not in st.session_state:
     st.session_state.pending_query = None
+# Whether to offer restoring saved chat history on startup
+if "chat_history_offer" not in st.session_state:
+    st.session_state.chat_history_offer = False
 
 # ---------------------------------------------------------------------------
 # Model setup
@@ -271,6 +275,13 @@ def load_document(uploaded_file, *, use_ocr: bool = False, progress_callback=Non
 # Index helpers
 # ---------------------------------------------------------------------------
 
+def _persist_chat_history():
+    """Save current chat history to disk."""
+    STORAGE_DIR.mkdir(parents=True, exist_ok=True)
+    with open(CHAT_HISTORY_FILE, "w", encoding="utf-8") as f:
+        json.dump(st.session_state.chat_history, f, ensure_ascii=False)
+
+
 def _build_index_from_cache() -> VectorStoreIndex | None:
     """Build a LlamaIndex VectorStoreIndex from the session doc_parts_cache."""
     all_documents: list[Document] = []
@@ -372,6 +383,9 @@ with st.sidebar:
                 if cache_file.exists():
                     with open(cache_file, "r", encoding="utf-8") as f:
                         st.session_state.doc_parts_cache = json.load(f)
+                # Flag saved chat history for restore prompt (shown in Chat area)
+                if CHAT_HISTORY_FILE.exists():
+                    st.session_state.chat_history_offer = True
                 st.success(
                     f"前回のデータを復元しました（{len(st.session_state.documents)}件）"
                 )
@@ -610,7 +624,28 @@ with chat_col:
     chat_container = st.container(height=520)
 
     with chat_container:
-        if not st.session_state.chat_history and st.session_state.pending_query is None:
+        # Offer to restore saved chat history on startup
+        if (
+            st.session_state.chat_history_offer
+            and not st.session_state.chat_history
+            and st.session_state.pending_query is None
+        ):
+            st.info("前回の会話履歴が保存されています")
+            rc1, rc2 = st.columns(2)
+            with rc1:
+                if st.button("前回の会話を復元", use_container_width=True):
+                    try:
+                        with open(CHAT_HISTORY_FILE, "r", encoding="utf-8") as f:
+                            st.session_state.chat_history = json.load(f)
+                    except Exception:
+                        st.error("会話履歴の読み込みに失敗しました")
+                    st.session_state.chat_history_offer = False
+                    st.rerun()
+            with rc2:
+                if st.button("新しい会話で開始", use_container_width=True):
+                    st.session_state.chat_history_offer = False
+                    st.rerun()
+        elif not st.session_state.chat_history and st.session_state.pending_query is None:
             st.caption("質問を入力すると、アップロード済み文書から回答します")
 
         for message in st.session_state.chat_history:
@@ -704,6 +739,7 @@ with chat_col:
                             "timestamp": pending["timestamp"],
                         }
                     )
+                    _persist_chat_history()
                     st.session_state.pending_query = None
                     st.rerun()
 
@@ -756,6 +792,9 @@ with foot1:
     if st.button("会話履歴クリア"):
         st.session_state.chat_history = []
         st.session_state.pending_query = None
+        st.session_state.chat_history_offer = False
+        if CHAT_HISTORY_FILE.exists():
+            CHAT_HISTORY_FILE.unlink()
         st.rerun()
 
 with foot2:
