@@ -489,6 +489,7 @@ with st.sidebar:
             st.session_state.chat_history = []
             st.session_state.doc_parts_cache = {}
             st.session_state.pending_query = None
+            st.session_state.chat_history_offer = False
             if STORAGE_DIR.exists():
                 shutil.rmtree(STORAGE_DIR)
             st.rerun()
@@ -648,7 +649,10 @@ with chat_col:
                         CHAT_HISTORY_FILE.unlink()
                     st.rerun()
         elif not st.session_state.chat_history and st.session_state.pending_query is None:
-            st.caption("質問を入力すると、アップロード済み文書から回答します")
+            if st.session_state.index is not None:
+                st.caption("質問を入力すると、アップロード済み文書から回答します")
+            else:
+                st.caption("サイドバーからPDFをアップロードしてください")
 
         for message in st.session_state.chat_history:
             with st.chat_message(message["role"]):
@@ -745,8 +749,12 @@ with chat_col:
                     st.session_state.pending_query = None
                     st.rerun()
 
-    # Quick-question chips
-    if st.session_state.index is not None:
+    # Quick-question chips (hidden while the restore-chat prompt is active)
+    _chat_ready = (
+        st.session_state.index is not None
+        and not st.session_state.chat_history_offer
+    )
+    if _chat_ready:
         q1, q2, q3 = st.columns(3)
         with q1:
             if st.button("仕様・スペック", use_container_width=True):
@@ -764,7 +772,7 @@ with chat_col:
 #           message appear.  Phase 2 (inside chat_container above) picks up
 #           the pending_query and generates the answer with a visible spinner.
 # ---------------------------------------------------------------------------
-if st.session_state.index is not None:
+if _chat_ready:
     prompt = st.chat_input("質問を入力してください（例：ベースライン補正の手順は？）")
 
     if "quick_question" in st.session_state:
