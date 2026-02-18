@@ -357,25 +357,26 @@ with st.sidebar:
 
     st.divider()
 
-    # --- Load persisted index -------------------------------------------
+    # --- Auto-load persisted index on session start ----------------------
     if STORAGE_DIR.exists() and st.session_state.index is None:
-        if st.button("保存済みデータを読み込む"):
-            with st.spinner("読み込み中..."):
-                try:
-                    storage_context = StorageContext.from_defaults(
-                        persist_dir=str(STORAGE_DIR)
-                    )
-                    st.session_state.index = load_index_from_storage(storage_context)
-                    if METADATA_FILE.exists():
-                        with open(METADATA_FILE, "r", encoding="utf-8") as f:
-                            st.session_state.documents = json.load(f)
-                    cache_file = STORAGE_DIR / "doc_parts_cache.json"
-                    if cache_file.exists():
-                        with open(cache_file, "r", encoding="utf-8") as f:
-                            st.session_state.doc_parts_cache = json.load(f)
-                    st.success("読み込み完了")
-                except Exception as exc:
-                    st.error(f"読み込みエラー: {exc}")
+        with st.spinner("保存済みデータを読み込み中..."):
+            try:
+                storage_context = StorageContext.from_defaults(
+                    persist_dir=str(STORAGE_DIR)
+                )
+                st.session_state.index = load_index_from_storage(storage_context)
+                if METADATA_FILE.exists():
+                    with open(METADATA_FILE, "r", encoding="utf-8") as f:
+                        st.session_state.documents = json.load(f)
+                cache_file = STORAGE_DIR / "doc_parts_cache.json"
+                if cache_file.exists():
+                    with open(cache_file, "r", encoding="utf-8") as f:
+                        st.session_state.doc_parts_cache = json.load(f)
+                st.success(
+                    f"前回のデータを復元しました（{len(st.session_state.documents)}件）"
+                )
+            except Exception as exc:
+                st.error(f"保存データの読み込みに失敗しました: {exc}")
 
     st.divider()
 
@@ -640,8 +641,22 @@ with chat_col:
                                     key=btn_key,
                                     type="tertiary",
                                 ):
-                                    st.session_state.viewer_doc = source["file_name"]
-                                    st.session_state.viewer_page = source["page"] - 1
+                                    src_name = source["file_name"]
+                                    target_page = source["page"]
+                                    st.session_state.viewer_doc = src_name
+                                    # Find the correct parts index by matching
+                                    # the page metadata (empty pages are skipped,
+                                    # so parts index != page_number - 1).
+                                    cached = st.session_state.doc_parts_cache.get(src_name, [])
+                                    page_idx = next(
+                                        (
+                                            idx
+                                            for idx, p in enumerate(cached)
+                                            if p["metadata"].get("page") == target_page
+                                        ),
+                                        max(target_page - 1, 0),  # fallback
+                                    )
+                                    st.session_state.viewer_page = page_idx
                                     st.rerun()
                             st.divider()
 
