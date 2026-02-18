@@ -10,6 +10,7 @@ OCR pipeline:
   pytesseract     -- OCR for pages where extracted text is too short
   Pillow          -- image handling between fitz and tesseract
 """
+import html
 import shutil
 import json
 from datetime import datetime
@@ -126,14 +127,23 @@ def setup_embedding():
 
 
 @st.cache_resource
-def setup_llm(model_name: str):
-    """Initialise the Ollama LLM for *model_name* (cached per model)."""
-    llm = Ollama(
+def _create_llm(model_name: str):
+    """Create an Ollama LLM instance (cached per model name)."""
+    return Ollama(
         model=model_name,
         request_timeout=300.0,
         temperature=0.0,
         system_prompt=SYSTEM_PROMPT,
     )
+
+
+def setup_llm(model_name: str):
+    """Initialise (or switch) the active LLM.
+
+    The Ollama object itself is cached, but ``Settings.llm`` is always
+    reassigned so that model switching works correctly.
+    """
+    llm = _create_llm(model_name)
     Settings.llm = llm
     return llm
 
@@ -283,6 +293,10 @@ def _build_index_from_cache() -> VectorStoreIndex | None:
     index.storage_context.persist(persist_dir=str(STORAGE_DIR))
     with open(METADATA_FILE, "w", encoding="utf-8") as f:
         json.dump(st.session_state.documents, f, ensure_ascii=False, indent=2)
+    # Also persist doc_parts_cache so the Source Viewer works after reload
+    cache_file = STORAGE_DIR / "doc_parts_cache.json"
+    with open(cache_file, "w", encoding="utf-8") as f:
+        json.dump(st.session_state.doc_parts_cache, f, ensure_ascii=False)
 
     return index
 
@@ -348,6 +362,10 @@ with st.sidebar:
                     if METADATA_FILE.exists():
                         with open(METADATA_FILE, "r", encoding="utf-8") as f:
                             st.session_state.documents = json.load(f)
+                    cache_file = STORAGE_DIR / "doc_parts_cache.json"
+                    if cache_file.exists():
+                        with open(cache_file, "r", encoding="utf-8") as f:
+                            st.session_state.doc_parts_cache = json.load(f)
                     st.success("読み込み完了")
                 except Exception as exc:
                     st.error(f"読み込みエラー: {exc}")
@@ -376,11 +394,16 @@ with st.sidebar:
             progress_placeholder = st.empty()
             status_placeholder = st.empty()
 
-            def _progress(current: int, total: int):
-                progress_placeholder.progress(
-                    current / total,
-                    text=f"読み取り中: {fname} ({current}/{total} ページ)",
-                )
+            def _make_progress(name, placeholder):
+                """Factory to capture *name* and *placeholder* eagerly."""
+                def _progress(current: int, total: int):
+                    placeholder.progress(
+                        current / total,
+                        text=f"読み取り中: {name} ({current}/{total} ページ)",
+                    )
+                return _progress
+
+            _progress = _make_progress(fname, progress_placeholder)
 
             use_ocr = st.session_state.ocr_enabled
             if use_ocr and Path(fname).suffix.lower() == ".pdf":
@@ -449,17 +472,6 @@ with st.sidebar:
 st.markdown(
     """
 <style>
-/* Source viewer and chat panels: fixed-height scrollable areas */
-div[data-testid="stVerticalBlockBorderWrapper"]
-    > div > div[data-testid="stVerticalBlock"]
-    > div.source-panel,
-div[data-testid="stVerticalBlockBorderWrapper"]
-    > div > div[data-testid="stVerticalBlock"]
-    > div.chat-panel {
-    max-height: 72vh;
-    overflow-y: auto;
-}
-/* Tighten spacing inside source viewer */
 .source-page-text {
     font-size: 0.85rem;
     line-height: 1.5;
@@ -551,9 +563,10 @@ with source_col:
         method_tag = "  [OCR]" if method == "ocr" else ""
         st.markdown(f"**ページ {page_num} / {total}{method_tag}**")
 
-        # Render page text in a scrollable container
+        # Render page text in a scrollable container (escape to prevent XSS)
+        escaped_text = html.escape(part["text"])
         st.markdown(
-            f'<div class="source-page-text">{part["text"]}</div>',
+            f'<div class="source-page-text">{escaped_text}</div>',
             unsafe_allow_html=True,
         )
 
