@@ -115,14 +115,23 @@ SYSTEM_PROMPT = (
 
 
 @st.cache_resource
-def setup_embedding():
-    """Initialise embedding model (cached, model-independent)."""
+def _create_embedding():
+    """Create the HuggingFace embedding model (cached)."""
     # e5-base: half the size of e5-large, practical on CPU-only machines.
     # Still supports 100+ languages including Japanese and English.
-    Settings.embed_model = HuggingFaceEmbedding(
+    return HuggingFaceEmbedding(
         model_name="intfloat/multilingual-e5-base",
         cache_folder="./models",
     )
+
+
+def setup_embedding():
+    """Initialise embedding model.
+
+    The HuggingFaceEmbedding object is cached, but ``Settings.embed_model``
+    is always reassigned so the global state stays consistent.
+    """
+    Settings.embed_model = _create_embedding()
     return True
 
 
@@ -151,9 +160,7 @@ def setup_llm(model_name: str):
 try:
     setup_embedding()
     setup_llm(st.session_state.selected_model)
-    _models_ok = True
 except Exception as exc:
-    _models_ok = False
     st.error(f"モデル初期化エラー: {exc}")
 
 # ---------------------------------------------------------------------------
@@ -380,6 +387,15 @@ with st.sidebar:
         help="取扱説明書、セミナー資料、アプリケーションノート等（PDF推奨）",
     )
 
+    def _make_progress(name, placeholder):
+        """Factory to capture *name* and *placeholder* eagerly."""
+        def _progress(current: int, total: int):
+            placeholder.progress(
+                current / total,
+                text=f"読み取り中: {name} ({current}/{total} ページ)",
+            )
+        return _progress
+
     if uploaded_files:
         new_docs_added = False
 
@@ -393,15 +409,6 @@ with st.sidebar:
             # Progress bar for PDF extraction (OCR can be slow)
             progress_placeholder = st.empty()
             status_placeholder = st.empty()
-
-            def _make_progress(name, placeholder):
-                """Factory to capture *name* and *placeholder* eagerly."""
-                def _progress(current: int, total: int):
-                    placeholder.progress(
-                        current / total,
-                        text=f"読み取り中: {name} ({current}/{total} ページ)",
-                    )
-                return _progress
 
             _progress = _make_progress(fname, progress_placeholder)
 
@@ -523,6 +530,13 @@ with source_col:
         parts = st.session_state.doc_parts_cache[selected_doc]
         total = len(parts)
 
+        # Clamp viewer_page to valid range (e.g. after switching to a
+        # shorter document) so the slider/buttons never receive an
+        # out-of-range value.
+        max_page = max(total - 1, 0)
+        if st.session_state.viewer_page > max_page:
+            st.session_state.viewer_page = max_page
+
         # Find doc metadata for OCR info
         doc_meta = next(
             (d for d in st.session_state.documents if d["name"] == selected_doc),
@@ -541,21 +555,20 @@ with source_col:
                          use_container_width=True):
                 st.session_state.viewer_page -= 1
         with nav_c3:
-            if st.button("▶", disabled=(st.session_state.viewer_page >= total - 1),
+            if st.button("▶", disabled=(st.session_state.viewer_page >= max_page),
                          use_container_width=True):
                 st.session_state.viewer_page += 1
         with nav_c2:
             page_idx = st.slider(
                 "ページ",
                 0,
-                max(total - 1, 0),
+                max_page,
                 st.session_state.viewer_page,
                 label_visibility="collapsed",
             )
             st.session_state.viewer_page = page_idx
 
-        # Ensure page index is within bounds
-        page_idx = min(st.session_state.viewer_page, total - 1)
+        page_idx = st.session_state.viewer_page
 
         part = parts[page_idx]
         page_num = part["metadata"].get("page", page_idx + 1)
