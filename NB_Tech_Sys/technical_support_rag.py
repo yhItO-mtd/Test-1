@@ -248,46 +248,52 @@ with st.sidebar:
                 doc_parts = load_document(uploaded_file)
                 if doc_parts:
                     new_doc_parts[uploaded_file.name] = doc_parts
-                    st.session_state.documents.append(
-                        {
-                            "name": uploaded_file.name,
-                            "type": Path(uploaded_file.name).suffix[1:].upper(),
-                            "uploaded_at": datetime.now().isoformat(),
-                            "parts": len(doc_parts),
-                        }
-                    )
 
         # インデックスの構築 / 更新
+        # NOTE: documents リストはインデックス構築成功後に更新する
+        #       （失敗時に「登録済みだがインデックス未構築」の不整合を防ぐ）
         if new_doc_parts:
             with st.spinner("インデックス構築中..."):
-                new_documents = []
-                for name, parts in new_doc_parts.items():
-                    file_type = Path(name).suffix[1:].upper()
-                    for part in parts:
-                        metadata = {
-                            "file_name": name,
-                            "file_type": file_type,
-                            **part["metadata"],
-                        }
-                        new_documents.append(
-                            Document(text=part["text"], metadata=metadata)
+                try:
+                    new_documents = []
+                    for name, parts in new_doc_parts.items():
+                        file_type = Path(name).suffix[1:].upper()
+                        for part in parts:
+                            metadata = {
+                                "file_name": name,
+                                "file_type": file_type,
+                                **part["metadata"],
+                            }
+                            new_documents.append(
+                                Document(text=part["text"], metadata=metadata)
+                            )
+
+                    if st.session_state.index is None:
+                        st.session_state.index = (
+                            VectorStoreIndex.from_documents(new_documents)
+                        )
+                    else:
+                        for doc in new_documents:
+                            st.session_state.index.insert(doc)
+
+                    # インデックス構築成功後にメタデータを更新
+                    for name, parts in new_doc_parts.items():
+                        st.session_state.documents.append(
+                            {
+                                "name": name,
+                                "type": Path(name).suffix[1:].upper(),
+                                "uploaded_at": datetime.now().isoformat(),
+                                "parts": len(parts),
+                            }
                         )
 
-                if st.session_state.index is None:
-                    # 新規インデックス構築
-                    st.session_state.index = (
-                        VectorStoreIndex.from_documents(new_documents)
+                    persist_index_and_metadata()
+                    st.success(
+                        f"✅ {len(new_doc_parts)}件の新規文書を登録"
+                        f"（合計: {len(st.session_state.documents)}件）"
                     )
-                else:
-                    # 既存インデックスに追加
-                    for doc in new_documents:
-                        st.session_state.index.insert(doc)
-
-                persist_index_and_metadata()
-                st.success(
-                    f"✅ {len(new_doc_parts)}件の新規文書を登録"
-                    f"（合計: {len(st.session_state.documents)}件）"
-                )
+                except Exception as e:
+                    st.error(f"インデックス構築エラー: {e}")
 
     # 登録文書一覧
     if st.session_state.documents:
@@ -373,54 +379,71 @@ if st.session_state.index is not None:
         # AI応答
         with st.chat_message("assistant"):
             with st.spinner("文書を検索中..."):
-                query_engine = st.session_state.index.as_query_engine(
-                    similarity_top_k=5,
-                    response_mode="compact",
-                )
-                response = query_engine.query(prompt)
+                try:
+                    query_engine = st.session_state.index.as_query_engine(
+                        similarity_top_k=5,
+                        response_mode="compact",
+                    )
+                    response = query_engine.query(prompt)
 
-                st.markdown(response.response)
+                    st.markdown(response.response)
 
-                # ソース情報収集
-                sources = []
-                if response.source_nodes:
-                    for node in response.source_nodes:
-                        score = node.score
-                        sources.append(
-                            {
-                                "file_name": node.metadata.get(
-                                    "file_name", "unknown"
-                                ),
-                                "file_type": node.metadata.get(
-                                    "file_type", ""
-                                ),
-                                "page": node.metadata.get("page"),
-                                "slide": node.metadata.get("slide"),
-                                "total_pages": node.metadata.get(
-                                    "total_pages"
-                                ),
-                                "total_slides": node.metadata.get(
-                                    "total_slides"
-                                ),
-                                "score": score
-                                if score is not None
-                                else 0.0,
-                                "text": node.text,
-                            }
+                    # ソース情報収集
+                    sources = []
+                    if response.source_nodes:
+                        for node in response.source_nodes:
+                            score = node.score
+                            sources.append(
+                                {
+                                    "file_name": node.metadata.get(
+                                        "file_name", "unknown"
+                                    ),
+                                    "file_type": node.metadata.get(
+                                        "file_type", ""
+                                    ),
+                                    "page": node.metadata.get("page"),
+                                    "slide": node.metadata.get("slide"),
+                                    "total_pages": node.metadata.get(
+                                        "total_pages"
+                                    ),
+                                    "total_slides": node.metadata.get(
+                                        "total_slides"
+                                    ),
+                                    "score": score
+                                    if score is not None
+                                    else 0.0,
+                                    "text": node.text,
+                                }
+                            )
+
+                    if sources:
+                        display_sources(
+                            sources, f"new_{timestamp}", expanded=True
                         )
 
-                if sources:
-                    display_sources(sources, f"new_{timestamp}", expanded=True)
-
-                # 履歴に追加
-                st.session_state.chat_history.append(
-                    {
-                        "role": "assistant",
-                        "content": response.response,
-                        "sources": sources,
-                        "timestamp": timestamp,
-                    }
-                )
+                    # 履歴に追加
+                    st.session_state.chat_history.append(
+                        {
+                            "role": "assistant",
+                            "content": response.response,
+                            "sources": sources,
+                            "timestamp": timestamp,
+                        }
+                    )
+                except Exception as e:
+                    error_msg = (
+                        f"回答の生成中にエラーが発生しました: {e}\n\n"
+                        "Ollama が起動しているか確認してください。"
+                    )
+                    st.error(error_msg)
+                    st.session_state.chat_history.append(
+                        {
+                            "role": "assistant",
+                            "content": error_msg,
+                            "sources": [],
+                            "timestamp": timestamp,
+                        }
+                    )
 
 else:
     st.info(

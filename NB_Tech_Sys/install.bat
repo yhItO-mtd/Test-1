@@ -1,14 +1,25 @@
 @echo off
+chcp 65001 >nul 2>&1
+cd /d "%~dp0"
+
 echo ============================================
 echo  NB_Tech_Sys - セットアップ
 echo ============================================
 echo.
 
+REM Python 存在確認
+python --version >nul 2>&1
+if errorlevel 1 (
+    echo エラー: Python が見つかりません。Python 3.10以上をインストールしてください。
+    pause
+    exit /b 1
+)
+
 REM 仮想環境作成
 echo [1/4] 仮想環境を作成しています...
 python -m venv venv
 if errorlevel 1 (
-    echo エラー: Python が見つかりません。Python 3.10以上をインストールしてください。
+    echo エラー: 仮想環境の作成に失敗しました。
     pause
     exit /b 1
 )
