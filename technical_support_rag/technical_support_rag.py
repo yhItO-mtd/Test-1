@@ -437,58 +437,190 @@ with st.sidebar:
             st.rerun()
 
 # ---------------------------------------------------------------------------
-# Main area
+# Custom CSS
+# ---------------------------------------------------------------------------
+st.markdown(
+    """
+<style>
+/* Source viewer and chat panels: fixed-height scrollable areas */
+div[data-testid="stVerticalBlockBorderWrapper"]
+    > div > div[data-testid="stVerticalBlock"]
+    > div.source-panel,
+div[data-testid="stVerticalBlockBorderWrapper"]
+    > div > div[data-testid="stVerticalBlock"]
+    > div.chat-panel {
+    max-height: 72vh;
+    overflow-y: auto;
+}
+/* Tighten spacing inside source viewer */
+.source-page-text {
+    font-size: 0.85rem;
+    line-height: 1.5;
+    white-space: pre-wrap;
+    word-wrap: break-word;
+    background: #f8f9fa;
+    border: 1px solid #e0e0e0;
+    border-radius: 0.4rem;
+    padding: 0.8rem;
+    max-height: 52vh;
+    overflow-y: auto;
+}
+</style>
+""",
+    unsafe_allow_html=True,
+)
+
+# ---------------------------------------------------------------------------
+# Main area — two-column layout (Sources | Chat)
 # ---------------------------------------------------------------------------
 st.title("Technical Support AI")
-st.caption("取扱説明書・セミナー資料から自動回答")
 
-# Chat history
-for message in st.session_state.chat_history:
-    with st.chat_message(message["role"]):
-        st.markdown(message["content"])
+if "viewer_doc" not in st.session_state:
+    st.session_state.viewer_doc = None
+if "viewer_page" not in st.session_state:
+    st.session_state.viewer_page = 0
 
-        if message.get("sources"):
-            with st.expander("参照元の詳細", expanded=False):
-                for i, source in enumerate(message["sources"], 1):
-                    st.markdown(f"**[{i}] {source['file_name']}**")
-                    if source.get("page"):
-                        method = source.get("extraction_method", "text")
-                        method_label = " [OCR]" if method == "ocr" else ""
-                        st.info(
-                            f"ページ {source['page']}/{source.get('total_pages', '?')}{method_label}"
-                        )
-                    if source.get("score") is not None:
-                        st.caption(f"関連度: {source['score']:.3f}")
-                    st.markdown("**参照した文章（原文）：**")
-                    st.text_area(
-                        f"原文_{i}",
-                        source["text"],
-                        height=150,
-                        key=f"source_{message.get('timestamp', '')}_{i}",
-                        label_visibility="collapsed",
-                    )
-                    st.divider()
+source_col, chat_col = st.columns([2, 3], gap="large")
 
-# Query input
+# ========================== LEFT: Source Viewer ============================
+with source_col:
+    st.markdown("#### Sources")
+
+    if st.session_state.doc_parts_cache:
+        doc_names = list(st.session_state.doc_parts_cache.keys())
+
+        selected_doc = st.selectbox(
+            "ドキュメント",
+            doc_names,
+            index=(
+                doc_names.index(st.session_state.viewer_doc)
+                if st.session_state.viewer_doc in doc_names
+                else 0
+            ),
+            label_visibility="collapsed",
+        )
+        st.session_state.viewer_doc = selected_doc
+
+        parts = st.session_state.doc_parts_cache[selected_doc]
+        total = len(parts)
+
+        # Find doc metadata for OCR info
+        doc_meta = next(
+            (d for d in st.session_state.documents if d["name"] == selected_doc),
+            {},
+        )
+        ocr_count = doc_meta.get("ocr_pages", 0)
+        info_parts = [f"{total} ページ"]
+        if ocr_count:
+            info_parts.append(f"OCR {ocr_count}ページ")
+        st.caption(" / ".join(info_parts))
+
+        # Page navigation
+        nav_c1, nav_c2, nav_c3 = st.columns([1, 3, 1])
+        with nav_c1:
+            if st.button("◀", disabled=(st.session_state.viewer_page <= 0),
+                         use_container_width=True):
+                st.session_state.viewer_page -= 1
+        with nav_c3:
+            if st.button("▶", disabled=(st.session_state.viewer_page >= total - 1),
+                         use_container_width=True):
+                st.session_state.viewer_page += 1
+        with nav_c2:
+            page_idx = st.slider(
+                "ページ",
+                0,
+                max(total - 1, 0),
+                st.session_state.viewer_page,
+                label_visibility="collapsed",
+            )
+            st.session_state.viewer_page = page_idx
+
+        # Ensure page index is within bounds
+        page_idx = min(st.session_state.viewer_page, total - 1)
+
+        part = parts[page_idx]
+        page_num = part["metadata"].get("page", page_idx + 1)
+        method = part["metadata"].get("extraction_method", "text")
+        method_tag = "  [OCR]" if method == "ocr" else ""
+        st.markdown(f"**ページ {page_num} / {total}{method_tag}**")
+
+        # Render page text in a scrollable container
+        st.markdown(
+            f'<div class="source-page-text">{part["text"]}</div>',
+            unsafe_allow_html=True,
+        )
+
+    else:
+        st.info("サイドバーからPDFをアップロードすると\nここに内容が表示されます")
+        st.markdown(
+            f"""
+**使い方**
+1. サイドバーからPDFをアップロード
+2. ここで内容を確認
+3. 右側のチャットで質問
+
+**OCR**: {"利用可能" if OCR_AVAILABLE else "未インストール"}
+""",
+        )
+
+# ========================== RIGHT: Chat ====================================
+with chat_col:
+    st.markdown("#### Chat")
+
+    # Scrollable chat area
+    chat_container = st.container(height=520)
+
+    with chat_container:
+        if not st.session_state.chat_history:
+            st.caption("質問を入力すると、アップロード済み文書から回答します")
+
+        for message in st.session_state.chat_history:
+            with st.chat_message(message["role"]):
+                st.markdown(message["content"])
+
+                if message.get("sources"):
+                    with st.expander("参照元", expanded=False):
+                        for i, source in enumerate(message["sources"], 1):
+                            st.markdown(f"**[{i}] {source['file_name']}**")
+                            if source.get("page"):
+                                method = source.get("extraction_method", "text")
+                                method_label = " [OCR]" if method == "ocr" else ""
+                                st.caption(
+                                    f"p.{source['page']}/{source.get('total_pages', '?')}{method_label}"
+                                    f"　関連度: {source['score']:.3f}"
+                                    if source.get("score") is not None
+                                    else f"p.{source['page']}/{source.get('total_pages', '?')}{method_label}"
+                                )
+                            # "Jump to source" button
+                            if source.get("file_name") and source.get("page"):
+                                btn_key = f"jump_{message.get('timestamp','')}_{i}"
+                                if st.button(
+                                    f"📄 p.{source['page']} を表示",
+                                    key=btn_key,
+                                    type="tertiary",
+                                ):
+                                    st.session_state.viewer_doc = source["file_name"]
+                                    st.session_state.viewer_page = source["page"] - 1
+                                    st.rerun()
+                            st.divider()
+
+    # Quick-question chips
+    if st.session_state.index is not None:
+        q1, q2, q3 = st.columns(3)
+        with q1:
+            if st.button("仕様・スペック", use_container_width=True):
+                st.session_state.quick_question = "この製品の主な仕様とスペックを教えてください"
+        with q2:
+            if st.button("トラブル対処", use_container_width=True):
+                st.session_state.quick_question = "よくあるトラブルとその対処法を教えてください"
+        with q3:
+            if st.button("メンテナンス", use_container_width=True):
+                st.session_state.quick_question = "日常的なメンテナンス方法を教えてください"
+
+# ---------------------------------------------------------------------------
+# Chat input (full-width, at bottom)
+# ---------------------------------------------------------------------------
 if st.session_state.index is not None:
-    st.markdown("### よくある質問")
-    col1, col2, col3 = st.columns(3)
-    with col1:
-        if st.button("仕様・スペック"):
-            st.session_state.quick_question = (
-                "この製品の主な仕様とスペックを教えてください"
-            )
-    with col2:
-        if st.button("トラブルシューティング"):
-            st.session_state.quick_question = (
-                "よくあるトラブルとその対処法を教えてください"
-            )
-    with col3:
-        if st.button("メンテナンス"):
-            st.session_state.quick_question = (
-                "日常的なメンテナンス方法を教えてください"
-            )
-
     prompt = st.chat_input("質問を入力してください（例：ベースライン補正の手順は？）")
 
     if "quick_question" in st.session_state:
@@ -501,103 +633,56 @@ if st.session_state.index is not None:
         st.session_state.chat_history.append(
             {"role": "user", "content": prompt, "timestamp": timestamp}
         )
-        with st.chat_message("user"):
-            st.markdown(prompt)
 
-        with st.chat_message("assistant"):
-            with st.spinner("文書を検索中..."):
-                try:
-                    query_engine = st.session_state.index.as_query_engine(
-                        similarity_top_k=5,
-                        response_mode="compact",
-                    )
-                    response = query_engine.query(prompt)
-                except Exception as exc:
-                    st.error(
-                        f"回答生成エラー: {exc}\n\n"
-                        "Ollamaが起動しているか確認してください: `ollama serve`"
-                    )
-                    st.stop()
+        try:
+            query_engine = st.session_state.index.as_query_engine(
+                similarity_top_k=5,
+                response_mode="compact",
+            )
+            response = query_engine.query(prompt)
+        except Exception as exc:
+            st.error(
+                f"回答生成エラー: {exc}\n\n"
+                "Ollamaが起動しているか確認してください: `ollama serve`"
+            )
+            st.stop()
 
-                st.markdown(response.response)
+        sources: list[dict] = []
+        for node in response.source_nodes:
+            sources.append(
+                {
+                    "file_name": node.metadata.get("file_name", "unknown"),
+                    "file_type": node.metadata.get("file_type", ""),
+                    "page": node.metadata.get("page"),
+                    "total_pages": node.metadata.get("total_pages"),
+                    "extraction_method": node.metadata.get("extraction_method", "text"),
+                    "score": node.score,
+                    "text": node.text,
+                }
+            )
 
-                sources: list[dict] = []
-                for node in response.source_nodes:
-                    sources.append(
-                        {
-                            "file_name": node.metadata.get("file_name", "unknown"),
-                            "file_type": node.metadata.get("file_type", ""),
-                            "page": node.metadata.get("page"),
-                            "total_pages": node.metadata.get("total_pages"),
-                            "extraction_method": node.metadata.get("extraction_method", "text"),
-                            "score": node.score,
-                            "text": node.text,
-                        }
-                    )
-
-                if sources:
-                    with st.expander("参照元の詳細", expanded=True):
-                        for i, source in enumerate(sources, 1):
-                            st.markdown(f"**[{i}] {source['file_name']}**")
-                            if source.get("page"):
-                                method = source.get("extraction_method", "text")
-                                method_label = " [OCR]" if method == "ocr" else ""
-                                st.info(
-                                    f"ページ {source['page']}/{source.get('total_pages', '?')}{method_label}"
-                                )
-                            if source.get("score") is not None:
-                                st.caption(f"関連度: {source['score']:.3f}")
-                            st.markdown("**参照した文章（原文）：**")
-                            st.text_area(
-                                f"原文_{i}",
-                                source["text"],
-                                height=150,
-                                key=f"source_new_{timestamp}_{i}",
-                                label_visibility="collapsed",
-                            )
-                            st.divider()
-
-                st.session_state.chat_history.append(
-                    {
-                        "role": "assistant",
-                        "content": response.response,
-                        "sources": sources,
-                        "timestamp": timestamp,
-                    }
-                )
-else:
-    st.info("サイドバーから取扱説明書やセミナー資料をアップロードしてください")
-
-    st.markdown(
-        f"""
-### 使い方
-
-1. **PDFをアップロード**: サイドバーから取扱説明書や技術資料を登録
-2. **質問を入力**: 製品仕様、操作方法、トラブル対処など
-3. **回答を確認**: 参照元のページ番号・原文も確認できます
-
-### 対応ファイル
-- 📕 PDF（テキスト埋め込み / スキャン画像どちらも対応）
-- 📄 テキストファイル（TXT）
-
-### OCR 状態
-- Tesseract: **{"利用可能" if OCR_AVAILABLE else "未インストール"}**
-{("- スキャンPDFや画像ベースのPDFも自動でテキスト化されます" if OCR_AVAILABLE else "- スキャンPDFに対応するには [Tesseract](https://github.com/tesseract-ocr/tesseract) をインストールしてください")}
-"""
-    )
+        st.session_state.chat_history.append(
+            {
+                "role": "assistant",
+                "content": response.response,
+                "sources": sources,
+                "timestamp": timestamp,
+            }
+        )
+        st.rerun()
 
 # ---------------------------------------------------------------------------
 # Footer
 # ---------------------------------------------------------------------------
 st.divider()
-col1, col2, col3, col4 = st.columns(4)
+foot1, foot2, foot3 = st.columns(3)
 
-with col1:
+with foot1:
     if st.button("会話履歴クリア"):
         st.session_state.chat_history = []
         st.rerun()
 
-with col2:
+with foot2:
     if st.session_state.chat_history:
         export_data = {
             "export_date": datetime.now().isoformat(),
@@ -610,11 +695,7 @@ with col2:
             "application/json",
         )
 
-with col3:
-    if st.session_state.index:
-        st.success("準備完了")
-    else:
-        st.warning("文書待機中")
-
-with col4:
-    st.caption(f"登録: {len(st.session_state.documents)}件")
+with foot3:
+    status = "準備完了" if st.session_state.index else "文書待機中"
+    docs_n = len(st.session_state.documents)
+    st.caption(f"{status} / 登録: {docs_n}件")
