@@ -68,6 +68,10 @@ if "doc_parts_cache" not in st.session_state:
     st.session_state.doc_parts_cache = {}  # filename -> list of part dicts
 if "ocr_enabled" not in st.session_state:
     st.session_state.ocr_enabled = OCR_AVAILABLE
+# Two-phase query: store the pending question so the UI can show
+# the user message first, then generate the answer on the next rerun.
+if "pending_query" not in st.session_state:
+    st.session_state.pending_query = None
 
 # ---------------------------------------------------------------------------
 # Model setup
@@ -88,21 +92,24 @@ if "selected_model" not in st.session_state:
     st.session_state.selected_model = DEFAULT_MODEL
 
 SYSTEM_PROMPT = (
-    "You are a technical support AI specialised in product documentation.\n"
-    "Follow these rules:\n"
-    "1. Use ONLY information from the provided documents.\n"
-    "2. If the answer is not in the documents, say so clearly.\n"
-    "3. Cite specific page numbers or sections.\n"
+    "You are a technical support AI. Answer questions based ONLY on the "
+    "provided documents. Follow these rules:\n"
+    "1. Write a clear, conversational answer — not just bullet points.\n"
+    "2. Naturally embed citations like (p.12) or (Manual p.45) in your text "
+    "so the reader knows where each piece of information comes from.\n"
+    "3. If the documents do not contain the answer, say: "
+    "\"この情報は文書に記載されていません\" / "
+    "\"This information is not found in the documents.\"\n"
     "4. Use technical terms accurately.\n"
     "5. Reply in the same language as the user's question "
     "(Japanese or English).\n\n"
     "あなたは製品ドキュメント専門の技術サポートAIです。\n"
     "以下のルールに従ってください：\n"
-    "1. 提供された文書の情報のみを使用する\n"
-    "2. 不明な場合は「文書に記載がありません」と明示する\n"
-    "3. 具体的なページ番号や章を引用する\n"
+    "1. 箇条書きだけでなく、自然な会話文で回答する\n"
+    "2. 回答文中に (p.12) や (取扱説明書 p.45) のように出典を埋め込む\n"
+    "3. 文書に記載がない場合は「この情報は文書に記載されていません」と明示する\n"
     "4. 技術用語は正確に使用する\n"
-    "5. ユーザーの質問と同じ言語（日本語または英語）で回答する"
+    "5. ユーザーの質問と同じ言語で回答する"
 )
 
 
@@ -571,7 +578,7 @@ with chat_col:
     chat_container = st.container(height=520)
 
     with chat_container:
-        if not st.session_state.chat_history:
+        if not st.session_state.chat_history and st.session_state.pending_query is None:
             st.caption("質問を入力すると、アップロード済み文書から回答します")
 
         for message in st.session_state.chat_history:
@@ -585,17 +592,20 @@ with chat_col:
                             if source.get("page"):
                                 method = source.get("extraction_method", "text")
                                 method_label = " [OCR]" if method == "ocr" else ""
-                                st.caption(
-                                    f"p.{source['page']}/{source.get('total_pages', '?')}{method_label}"
+                                score_text = (
                                     f"　関連度: {source['score']:.3f}"
                                     if source.get("score") is not None
-                                    else f"p.{source['page']}/{source.get('total_pages', '?')}{method_label}"
+                                    else ""
+                                )
+                                st.caption(
+                                    f"p.{source['page']}/{source.get('total_pages', '?')}"
+                                    f"{method_label}{score_text}"
                                 )
                             # "Jump to source" button
                             if source.get("file_name") and source.get("page"):
                                 btn_key = f"jump_{message.get('timestamp','')}_{i}"
                                 if st.button(
-                                    f"📄 p.{source['page']} を表示",
+                                    f"p.{source['page']} を表示",
                                     key=btn_key,
                                     type="tertiary",
                                 ):
@@ -603,6 +613,52 @@ with chat_col:
                                     st.session_state.viewer_page = source["page"] - 1
                                     st.rerun()
                             st.divider()
+
+        # --- Phase 2: generate answer for pending query ---------------------
+        if st.session_state.pending_query is not None:
+            pending = st.session_state.pending_query
+            with st.chat_message("assistant"):
+                with st.spinner("文書を検索して回答を生成中..."):
+                    try:
+                        query_engine = st.session_state.index.as_query_engine(
+                            similarity_top_k=5,
+                            response_mode="compact",
+                        )
+                        response = query_engine.query(pending["prompt"])
+                    except Exception as exc:
+                        st.error(
+                            f"回答生成エラー: {exc}\n\n"
+                            "Ollamaが起動しているか確認してください: `ollama serve`"
+                        )
+                        st.session_state.pending_query = None
+                        st.stop()
+
+                    sources: list[dict] = []
+                    for node in response.source_nodes:
+                        sources.append(
+                            {
+                                "file_name": node.metadata.get("file_name", "unknown"),
+                                "file_type": node.metadata.get("file_type", ""),
+                                "page": node.metadata.get("page"),
+                                "total_pages": node.metadata.get("total_pages"),
+                                "extraction_method": node.metadata.get(
+                                    "extraction_method", "text"
+                                ),
+                                "score": node.score,
+                                "text": node.text,
+                            }
+                        )
+
+                    st.session_state.chat_history.append(
+                        {
+                            "role": "assistant",
+                            "content": response.response,
+                            "sources": sources,
+                            "timestamp": pending["timestamp"],
+                        }
+                    )
+                    st.session_state.pending_query = None
+                    st.rerun()
 
     # Quick-question chips
     if st.session_state.index is not None:
@@ -619,6 +675,9 @@ with chat_col:
 
 # ---------------------------------------------------------------------------
 # Chat input (full-width, at bottom)
+# Phase 1: append user message → rerun immediately so the user sees their
+#           message appear.  Phase 2 (inside chat_container above) picks up
+#           the pending_query and generates the answer with a visible spinner.
 # ---------------------------------------------------------------------------
 if st.session_state.index is not None:
     prompt = st.chat_input("質問を入力してください（例：ベースライン補正の手順は？）")
@@ -627,48 +686,17 @@ if st.session_state.index is not None:
         prompt = st.session_state.quick_question
         del st.session_state.quick_question
 
-    if prompt:
+    if prompt and st.session_state.pending_query is None:
         timestamp = datetime.now().isoformat()
 
         st.session_state.chat_history.append(
             {"role": "user", "content": prompt, "timestamp": timestamp}
         )
-
-        try:
-            query_engine = st.session_state.index.as_query_engine(
-                similarity_top_k=5,
-                response_mode="compact",
-            )
-            response = query_engine.query(prompt)
-        except Exception as exc:
-            st.error(
-                f"回答生成エラー: {exc}\n\n"
-                "Ollamaが起動しているか確認してください: `ollama serve`"
-            )
-            st.stop()
-
-        sources: list[dict] = []
-        for node in response.source_nodes:
-            sources.append(
-                {
-                    "file_name": node.metadata.get("file_name", "unknown"),
-                    "file_type": node.metadata.get("file_type", ""),
-                    "page": node.metadata.get("page"),
-                    "total_pages": node.metadata.get("total_pages"),
-                    "extraction_method": node.metadata.get("extraction_method", "text"),
-                    "score": node.score,
-                    "text": node.text,
-                }
-            )
-
-        st.session_state.chat_history.append(
-            {
-                "role": "assistant",
-                "content": response.response,
-                "sources": sources,
-                "timestamp": timestamp,
-            }
-        )
+        # Store the query for Phase 2; rerun so user message is visible first
+        st.session_state.pending_query = {
+            "prompt": prompt,
+            "timestamp": timestamp,
+        }
         st.rerun()
 
 # ---------------------------------------------------------------------------
