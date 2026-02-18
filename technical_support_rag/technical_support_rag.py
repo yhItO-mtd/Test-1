@@ -402,6 +402,10 @@ with st.sidebar:
         for uploaded_file in uploaded_files:
             fname = uploaded_file.name
             if fname in st.session_state.doc_parts_cache:
+                st.info(
+                    f"「{fname}」は登録済みのため、スキップしました。"
+                    "再登録するには先に「すべてクリア」してください。"
+                )
                 continue
 
             uploaded_file.seek(0)
@@ -469,6 +473,7 @@ with st.sidebar:
             st.session_state.index = None
             st.session_state.chat_history = []
             st.session_state.doc_parts_cache = {}
+            st.session_state.pending_query = None
             if STORAGE_DIR.exists():
                 shutil.rmtree(STORAGE_DIR)
             st.rerun()
@@ -675,10 +680,11 @@ with chat_col:
                             }
                         )
 
+                    answer_text = response.response or "（回答を生成できませんでした）"
                     st.session_state.chat_history.append(
                         {
                             "role": "assistant",
-                            "content": response.response,
+                            "content": answer_text,
                             "sources": sources,
                             "timestamp": pending["timestamp"],
                         }
@@ -734,6 +740,7 @@ foot1, foot2, foot3 = st.columns(3)
 with foot1:
     if st.button("会話履歴クリア"):
         st.session_state.chat_history = []
+        st.session_state.pending_query = None
         st.rerun()
 
 with foot2:
