@@ -684,15 +684,23 @@ if st.session_state.index is not None:
 
         # アクションボタン
         action_prompts = {
-            "📝 要約を生成": "登録されている文書の主要な内容を簡潔に要約してください。",
+            "📝 要約を生成": (
+                "登録されている文書の主要な内容を、"
+                "200文字程度で簡潔に要約してください。"
+            ),
             "❓ FAQ を作成": (
                 "文書に基づいて、想定されるよくある質問（FAQ）と"
-                "その回答を5つ作成してください。"
+                "その回答を作成してください。"
+                "各回答は200文字程度に収めてください。"
             ),
-            "📋 仕様一覧": "製品の主な仕様・スペックを箇条書きでまとめてください。",
+            "📋 仕様一覧": (
+                "製品の主な仕様・スペックを箇条書きでまとめてください。"
+                "全体で200文字程度に収めてください。"
+            ),
             "🔧 トラブル対応": (
                 "よくあるトラブル・エラーとその対処法を"
                 "一覧にしてください。"
+                "全体で200文字程度に収めてください。"
             ),
         }
 
@@ -704,6 +712,7 @@ if st.session_state.index is not None:
                 type="primary",
             ):
                 st.session_state.quick_question = prompt_text
+                st.session_state.quick_question_label = label
 
         # 参照元表示（最後の応答から）
         last_sources = get_last_sources()
@@ -800,22 +809,33 @@ if st.session_state.index is not None:
 
     # クイック質問（スタジオアクション）の処理
     # ユーザーがチャット入力に入力済みの場合はそちらを優先する
+    studio_label = None
     if "quick_question" in st.session_state:
         if not prompt:
             prompt = st.session_state.quick_question
+            studio_label = st.session_state.get("quick_question_label")
         del st.session_state.quick_question
+        st.session_state.pop("quick_question_label", None)
 
     if prompt:
         timestamp = datetime.now().isoformat()
 
+        # チャットに表示するテキスト（スタジオ操作はラベル、手入力はそのまま）
+        display_text = studio_label if studio_label else prompt
+
         st.session_state.chat_history.append(
-            {"role": "user", "content": prompt, "timestamp": timestamp}
+            {
+                "role": "user",
+                "content": display_text,
+                "timestamp": timestamp,
+                "query": prompt,
+            }
         )
 
-        # ユーザーの質問を即座に表示
+        # ユーザーの操作を即座に表示
         with chat_col:
             with st.chat_message("user"):
-                st.markdown(prompt)
+                st.markdown(display_text)
 
         # クエリ実行
         try:
@@ -834,13 +854,23 @@ if st.session_state.index is not None:
                 )
             else:
                 # 回答生成中の表示
+                status_msg = (
+                    f"「{studio_label}」を生成中..."
+                    if studio_label
+                    else "回答を生成中..."
+                )
                 with chat_col:
                     with st.chat_message("assistant"):
-                        with st.status("回答を生成中...", expanded=True) as status:
+                        with st.status(status_msg, expanded=True) as status:
                             st.write("📄 関連する文書を検索中...")
                             response = query_engine.query(prompt)
                             st.write("✅ 回答を取得しました")
-                            status.update(label="回答完了", state="complete", expanded=False)
+                            done_msg = (
+                                f"「{studio_label}」生成完了"
+                                if studio_label
+                                else "回答完了"
+                            )
+                            status.update(label=done_msg, state="complete", expanded=False)
                 sources = collect_sources(response)
 
                 st.session_state.chat_history.append(
