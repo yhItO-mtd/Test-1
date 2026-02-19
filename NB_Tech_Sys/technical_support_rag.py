@@ -481,8 +481,9 @@ def build_query_engine():
     if not selected:
         return None
 
-    # 全ソース選択時はフィルタなし
-    if HAS_FILTERS and selected != all_names:
+    # 常にメタデータフィルタを適用
+    # （個別削除されたドキュメントのノードがインデックスに残るため）
+    if HAS_FILTERS:
         metadata_filters = MetadataFilters(
             filters=[
                 MetadataFilter(key="file_name", value=name)
@@ -628,25 +629,58 @@ with st.sidebar:
                         st.session_state.selected_sources.add(name)
 
                     persist_index_and_metadata()
-                    st.success(f"✅ {len(new_doc_parts)}件追加")
+                    # アップローダーをクリアして再描画
+                    st.session_state.uploader_key += 1
+                    st.rerun()
                 except Exception as e:
                     st.error(f"インデックス構築エラー: {e}")
 
-    # ソース一覧（チェックボックス付き）
+    # ソース一覧（チェックボックス + 個別削除）
     if st.session_state.documents:
         st.divider()
+        st.caption("読み込み済みソース — チェックで参照対象を選択")
 
+        doc_to_remove = None
         for doc in st.session_state.documents:
             icon = ICON_MAP.get(doc["type"], "📄")
-            is_selected = st.checkbox(
-                f"{icon} {doc['name']}",
-                value=(doc["name"] in st.session_state.selected_sources),
-                key=f"src_{doc['name']}",
-            )
-            if is_selected:
-                st.session_state.selected_sources.add(doc["name"])
+            cb_col, del_col = st.columns([5, 1])
+            with cb_col:
+                is_selected = st.checkbox(
+                    f"{icon} {doc['name']}",
+                    value=(doc["name"] in st.session_state.selected_sources),
+                    key=f"src_{doc['name']}",
+                )
+                if is_selected:
+                    st.session_state.selected_sources.add(doc["name"])
+                else:
+                    st.session_state.selected_sources.discard(doc["name"])
+            with del_col:
+                if st.button(
+                    "✕",
+                    key=f"del_{doc['name']}",
+                    help=f"{doc['name']} を削除",
+                ):
+                    doc_to_remove = doc["name"]
+
+        # 個別削除の実行（ループ外で処理）
+        if doc_to_remove:
+            st.session_state.documents = [
+                d
+                for d in st.session_state.documents
+                if d["name"] != doc_to_remove
+            ]
+            st.session_state.selected_sources.discard(doc_to_remove)
+            st.session_state.failed_files.discard(doc_to_remove)
+
+            if st.session_state.documents:
+                # 残りのドキュメントでインデックスを再構築
+                persist_index_and_metadata()
             else:
-                st.session_state.selected_sources.discard(doc["name"])
+                # 全件削除された場合
+                st.session_state.index = None
+                if Path(STORAGE_DIR).exists():
+                    shutil.rmtree(STORAGE_DIR)
+            st.rerun()
 
         st.divider()
         if st.button("🗑️ すべてクリア", use_container_width=True):
