@@ -44,6 +44,10 @@ METADATA_PATH = str(BASE_DIR / "storage" / "metadata.json")
 CHAT_HISTORY_PATH = str(BASE_DIR / "storage" / "chat_history.json")
 MODELS_DIR = str(BASE_DIR / "models")
 
+# LLM モデル設定（メモリに合わせて変更可）
+# llama3.2:3b ≈ 6 GiB / llama3.1:8b ≈ 20 GiB
+OLLAMA_MODEL = "llama3.2:3b"
+
 # ---------------------------------------------------------------------------
 # ページ設定 & カスタムCSS
 # ---------------------------------------------------------------------------
@@ -200,7 +204,7 @@ def setup_models():
         cache_folder=MODELS_DIR,
     )
     Settings.llm = Ollama(
-        model="llama3.1:8b",
+        model=OLLAMA_MODEL,
         request_timeout=300.0,
         temperature=0.0,
         system_prompt=(
@@ -223,7 +227,8 @@ def check_ollama_status():
         with urllib.request.urlopen(req, timeout=5) as resp:
             data = json.loads(resp.read().decode())
             models = [m["name"] for m in data.get("models", [])]
-            has_model = any("llama3.1" in m for m in models)
+            model_base = OLLAMA_MODEL.split(":")[0]
+            has_model = any(model_base in m for m in models)
             return True, has_model, models
     except Exception:
         return False, False, []
@@ -242,9 +247,9 @@ if not ollama_ok:
     )
 elif not model_ok:
     st.warning(
-        "⚠️ モデル `llama3.1:8b` が見つかりません。\n\n"
+        f"⚠️ モデル `{OLLAMA_MODEL}` が見つかりません。\n\n"
         "コマンドプロンプトで以下を実行してください:\n"
-        "```\nollama pull llama3.1:8b\n```\n\n"
+        f"```\nollama pull {OLLAMA_MODEL}\n```\n\n"
         f"現在のモデル: {', '.join(available_models) if available_models else 'なし'}"
     )
 
@@ -776,7 +781,7 @@ if st.session_state.index is not None:
                 error_msg = (
                     "LLMモデルが見つかりません。\n\n"
                     "コマンドプロンプトで以下を実行してください:\n"
-                    "```\nollama pull llama3.1:8b\n```\n\n"
+                    f"```\nollama pull {OLLAMA_MODEL}\n```\n\n"
                     f"詳細: `{error_detail}`"
                 )
             else:
