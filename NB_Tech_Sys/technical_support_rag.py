@@ -22,6 +22,7 @@ import html
 import json
 import shutil
 import os
+import urllib.request
 from datetime import datetime
 
 # メタデータフィルタ（ソース選択用）
@@ -215,8 +216,37 @@ def setup_models():
     return True
 
 
+def check_ollama_status():
+    """Ollama の接続状態とモデル有無を確認する"""
+    try:
+        req = urllib.request.Request("http://localhost:11434/api/tags")
+        with urllib.request.urlopen(req, timeout=5) as resp:
+            data = json.loads(resp.read().decode())
+            models = [m["name"] for m in data.get("models", [])]
+            has_model = any("llama3.1" in m for m in models)
+            return True, has_model, models
+    except Exception:
+        return False, False, []
+
+
 with st.spinner("AIモデルを初期化中...（初回は数分かかります）"):
     setup_models()
+
+# Ollama 接続チェック
+ollama_ok, model_ok, available_models = check_ollama_status()
+if not ollama_ok:
+    st.warning(
+        "⚠️ Ollama に接続できません。回答生成にはOllamaが必要です。\n\n"
+        "1. Ollama をインストール: https://ollama.ai/download\n"
+        "2. Ollama を起動してください"
+    )
+elif not model_ok:
+    st.warning(
+        "⚠️ モデル `llama3.1:8b` が見つかりません。\n\n"
+        "コマンドプロンプトで以下を実行してください:\n"
+        "```\nollama pull llama3.1:8b\n```\n\n"
+        f"現在のモデル: {', '.join(available_models) if available_models else 'なし'}"
+    )
 
 # 保存済みインデックスの自動読み込み
 if st.session_state.index is None and Path(STORAGE_DIR).exists():
@@ -732,11 +762,28 @@ if st.session_state.index is not None:
                         "timestamp": timestamp,
                     }
                 )
-        except Exception:
-            error_msg = (
-                "回答の生成中にエラーが発生しました。\n\n"
-                "Ollama が起動しているか確認してください。"
-            )
+        except Exception as e:
+            error_detail = str(e)
+            if "refused" in error_detail.lower() or "connect" in error_detail.lower():
+                error_msg = (
+                    "Ollama に接続できません。\n\n"
+                    "**確認事項:**\n"
+                    "1. Ollama が起動しているか\n"
+                    "2. `ollama serve` をコマンドプロンプトで実行\n\n"
+                    f"詳細: `{error_detail}`"
+                )
+            elif "model" in error_detail.lower() or "not found" in error_detail.lower():
+                error_msg = (
+                    "LLMモデルが見つかりません。\n\n"
+                    "コマンドプロンプトで以下を実行してください:\n"
+                    "```\nollama pull llama3.1:8b\n```\n\n"
+                    f"詳細: `{error_detail}`"
+                )
+            else:
+                error_msg = (
+                    "回答の生成中にエラーが発生しました。\n\n"
+                    f"詳細: `{error_detail}`"
+                )
             st.session_state.chat_history.append(
                 {
                     "role": "assistant",
