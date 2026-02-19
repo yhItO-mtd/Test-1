@@ -239,10 +239,61 @@ def check_ollama_status():
         return False, False, []
 
 
+def pull_ollama_model(model_name):
+    """Ollama モデルをダウンロードする（プログレス付き）"""
+    payload = json.dumps({"name": model_name}).encode("utf-8")
+    req = urllib.request.Request(
+        "http://localhost:11434/api/pull",
+        data=payload,
+        headers={"Content-Type": "application/json"},
+        method="POST",
+    )
+    with st.status(
+        f"LLMモデル `{model_name}` をダウンロード中...", expanded=True
+    ) as status:
+        progress_bar = st.progress(0, text="準備中...")
+        try:
+            with urllib.request.urlopen(req, timeout=600) as resp:
+                for line in resp:
+                    if not line.strip():
+                        continue
+                    data = json.loads(line.decode("utf-8"))
+                    msg = data.get("status", "")
+
+                    total = data.get("total", 0)
+                    completed = data.get("completed", 0)
+                    if total > 0:
+                        pct = completed / total
+                        size_mb = total / (1024 * 1024)
+                        done_mb = completed / (1024 * 1024)
+                        progress_bar.progress(
+                            pct,
+                            text=f"{msg}  ({done_mb:.0f}/{size_mb:.0f} MB)",
+                        )
+                    else:
+                        progress_bar.progress(0, text=msg)
+
+            progress_bar.progress(1.0, text="ダウンロード完了")
+            status.update(
+                label=f"✅ `{model_name}` のセットアップ完了",
+                state="complete",
+                expanded=False,
+            )
+            return True
+        except Exception as e:
+            status.update(
+                label=f"❌ ダウンロード失敗",
+                state="error",
+                expanded=True,
+            )
+            st.error(f"詳細: {e}")
+            return False
+
+
 with st.spinner("AIモデルを初期化中...（初回は数分かかります）"):
     setup_models()
 
-# Ollama 接続チェック
+# Ollama 接続チェック & 自動ダウンロード
 ollama_ok, model_ok, available_models = check_ollama_status()
 if not ollama_ok:
     st.warning(
@@ -251,12 +302,9 @@ if not ollama_ok:
         "2. Ollama を起動してください"
     )
 elif not model_ok:
-    st.warning(
-        f"⚠️ モデル `{OLLAMA_MODEL}` が見つかりません。\n\n"
-        "コマンドプロンプトで以下を実行してください:\n"
-        f"```\nollama pull {OLLAMA_MODEL}\n```\n\n"
-        f"現在のモデル: {', '.join(available_models) if available_models else 'なし'}"
-    )
+    st.info(f"🔽 モデル `{OLLAMA_MODEL}` が未インストールです。自動ダウンロードを開始します...")
+    if pull_ollama_model(OLLAMA_MODEL):
+        st.rerun()
 
 # 埋め込みモデル変更検知（モデルが変わったら旧インデックスを破棄）
 _embed_marker = str(BASE_DIR / "storage" / ".embed_model")
