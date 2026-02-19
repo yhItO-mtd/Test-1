@@ -45,8 +45,12 @@ CHAT_HISTORY_PATH = str(BASE_DIR / "storage" / "chat_history.json")
 MODELS_DIR = str(BASE_DIR / "models")
 
 # LLM モデル設定（メモリに合わせて変更可）
-# llama3.2:3b ≈ 6 GiB / llama3.1:8b ≈ 20 GiB
-OLLAMA_MODEL = "llama3.2:3b"
+# llama3.2:1b ≈ 3 GiB / llama3.2:3b ≈ 6 GiB / llama3.1:8b ≈ 20 GiB
+OLLAMA_MODEL = "llama3.2:1b"
+
+# 埋め込みモデル設定
+# multilingual-e5-base ≈ 1 GiB / multilingual-e5-large ≈ 2 GiB
+EMBED_MODEL = "intfloat/multilingual-e5-base"
 
 # ---------------------------------------------------------------------------
 # ページ設定 & カスタムCSS
@@ -200,7 +204,7 @@ ICON_MAP = {
 def setup_models():
     """埋め込みモデルとLLMを初期化する"""
     Settings.embed_model = HuggingFaceEmbedding(
-        model_name="intfloat/multilingual-e5-large",
+        model_name=EMBED_MODEL,
         cache_folder=MODELS_DIR,
     )
     Settings.llm = Ollama(
@@ -252,6 +256,25 @@ elif not model_ok:
         f"```\nollama pull {OLLAMA_MODEL}\n```\n\n"
         f"現在のモデル: {', '.join(available_models) if available_models else 'なし'}"
     )
+
+# 埋め込みモデル変更検知（モデルが変わったら旧インデックスを破棄）
+_embed_marker = str(BASE_DIR / "storage" / ".embed_model")
+if Path(_embed_marker).exists():
+    _prev_model = Path(_embed_marker).read_text(encoding="utf-8").strip()
+else:
+    _prev_model = None
+
+if Path(STORAGE_DIR).exists() and _prev_model != EMBED_MODEL:
+    # 埋め込みモデルが変わったので旧インデックスは使えない
+    shutil.rmtree(STORAGE_DIR)
+    st.session_state.index = None
+    st.session_state.documents = []
+    st.session_state.selected_sources = set()
+    st.info("埋め込みモデルが変更されたため、インデックスをリセットしました。ソースを再登録してください。")
+
+# マーカーを書き出し
+os.makedirs(STORAGE_DIR, exist_ok=True)
+Path(_embed_marker).write_text(EMBED_MODEL, encoding="utf-8")
 
 # 保存済みインデックスの自動読み込み
 if st.session_state.index is None and Path(STORAGE_DIR).exists():
