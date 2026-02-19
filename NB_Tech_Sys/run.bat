@@ -4,16 +4,25 @@ cd /d "%~dp0"
 
 set "VENV_DIR=%USERPROFILE%\.nb_tech_venv"
 
-if not exist "%VENV_DIR%\Scripts\activate" (
+if not exist "%VENV_DIR%\Scripts\activate.bat" (
     echo [エラー] 仮想環境が見つかりません。先に install.bat を実行してください。
     pause
     exit /b 1
 )
 
-call "%VENV_DIR%\Scripts\activate"
-streamlit run technical_support_rag.py
+call "%VENV_DIR%\Scripts\activate.bat"
+
+where streamlit >nul 2>&1
 if errorlevel 1 (
-    echo.
-    echo エラーが発生しました。上記のメッセージを確認してください。
+    echo [エラー] streamlit が見つかりません。install.bat を再実行してください。
     pause
+    exit /b 1
 )
+
+echo アプリを起動しています... ブラウザが開くまでお待ちください。
+echo 終了するには Ctrl+C を押してください。
+echo.
+streamlit run technical_support_rag.py
+echo.
+echo アプリが終了しました。
+pause
