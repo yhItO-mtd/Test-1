@@ -211,7 +211,7 @@ def setup_models():
         model=OLLAMA_MODEL,
         request_timeout=300.0,
         temperature=0.1,
-        num_ctx=4096,
+        num_ctx=8192,
         system_prompt=(
             "あなたは製品の技術サポート専門AIです。"
             "必ず自然な日本語で回答してください。\n"
@@ -494,13 +494,13 @@ def build_query_engine():
             condition=FilterCondition.OR,
         )
         return st.session_state.index.as_query_engine(
-            similarity_top_k=3,
+            similarity_top_k=5,
             response_mode="compact",
             filters=metadata_filters,
         )
 
     return st.session_state.index.as_query_engine(
-        similarity_top_k=3,
+        similarity_top_k=5,
         response_mode="compact",
     )
 
