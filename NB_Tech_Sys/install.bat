@@ -35,7 +35,7 @@ if errorlevel 1 (
     pause
     exit /b 1
 )
-call "%VENV_DIR%\Scriptsctivate"
+call "%VENV_DIR%\Scripts\activate"
 
 REM パッケージインストール
 echo.
