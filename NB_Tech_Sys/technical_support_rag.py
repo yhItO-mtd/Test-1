@@ -211,6 +211,7 @@ def setup_models():
         model=OLLAMA_MODEL,
         request_timeout=300.0,
         temperature=0.0,
+        num_ctx=2048,
         system_prompt=(
             "あなたは製品の技術サポート専門AIです。\n"
             "以下のルールに従ってください：\n"
@@ -442,13 +443,13 @@ def build_query_engine():
             condition=FilterCondition.OR,
         )
         return st.session_state.index.as_query_engine(
-            similarity_top_k=5,
+            similarity_top_k=3,
             response_mode="compact",
             filters=metadata_filters,
         )
 
     return st.session_state.index.as_query_engine(
-        similarity_top_k=5,
+        similarity_top_k=3,
         response_mode="compact",
     )
 
@@ -779,7 +780,11 @@ if st.session_state.index is not None:
                     }
                 )
             else:
-                response = query_engine.query(prompt)
+                with st.status("回答を生成中...", expanded=True) as status:
+                    st.write("📄 関連する文書を検索中...")
+                    response = query_engine.query(prompt)
+                    st.write("✅ 回答を取得しました")
+                    status.update(label="回答完了", state="complete", expanded=False)
                 sources = collect_sources(response)
 
                 st.session_state.chat_history.append(
