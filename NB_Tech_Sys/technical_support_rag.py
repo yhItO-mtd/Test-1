@@ -812,6 +812,11 @@ if st.session_state.index is not None:
             {"role": "user", "content": prompt, "timestamp": timestamp}
         )
 
+        # ユーザーの質問を即座に表示
+        with chat_col:
+            with st.chat_message("user"):
+                st.markdown(prompt)
+
         # クエリ実行
         try:
             query_engine = build_query_engine()
@@ -828,11 +833,14 @@ if st.session_state.index is not None:
                     }
                 )
             else:
-                with st.status("回答を生成中...", expanded=True) as status:
-                    st.write("📄 関連する文書を検索中...")
-                    response = query_engine.query(prompt)
-                    st.write("✅ 回答を取得しました")
-                    status.update(label="回答完了", state="complete", expanded=False)
+                # 回答生成中の表示
+                with chat_col:
+                    with st.chat_message("assistant"):
+                        with st.status("回答を生成中...", expanded=True) as status:
+                            st.write("📄 関連する文書を検索中...")
+                            response = query_engine.query(prompt)
+                            st.write("✅ 回答を取得しました")
+                            status.update(label="回答完了", state="complete", expanded=False)
                 sources = collect_sources(response)
 
                 st.session_state.chat_history.append(
