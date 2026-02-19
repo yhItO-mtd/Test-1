@@ -2,85 +2,89 @@
 cd /d "%~dp0"
 
 echo ============================================
-echo  NB_Tech_Sys - ƒZƒbƒgƒAƒbƒv
+echo  NB_Tech_Sys - ã‚»ãƒƒãƒˆã‚¢ãƒƒãƒ—
 echo ============================================
 echo.
 
-REM Python ‘¶ÝŠm”F + ƒo[ƒWƒ‡ƒ“ŒŸØ (BUG-1)
+REM Python å­˜åœ¨ç¢ºèª + ãƒãƒ¼ã‚¸ãƒ§ãƒ³æ¤œè¨¼ (BUG-1)
 python --version >nul 2>&1
 if errorlevel 1 (
-    echo ƒGƒ‰[: Python ‚ªŒ©‚Â‚©‚è‚Ü‚¹‚ñBPython 3.10ˆÈã‚ðƒCƒ“ƒXƒg[ƒ‹‚µ‚Ä‚­‚¾‚³‚¢B
+    echo ã‚¨ãƒ©ãƒ¼: Python ãŒè¦‹ã¤ã‹ã‚Šã¾ã›ã‚“ã€‚Python 3.10ä»¥ä¸Šã‚’ã‚¤ãƒ³ã‚¹ãƒˆãƒ¼ãƒ«ã—ã¦ãã ã•ã„ã€‚
     pause
     exit /b 1
 )
 
 python -c "import sys; exit(0 if sys.version_info >= (3, 10) else 1)" >nul 2>&1
 if errorlevel 1 (
-    echo ƒGƒ‰[: Python 3.10ˆÈã‚ª•K—v‚Å‚·BŒ»Ý‚Ìƒo[ƒWƒ‡ƒ“:
+    echo ã‚¨ãƒ©ãƒ¼: Python 3.10ä»¥ä¸ŠãŒå¿…è¦ã§ã™ã€‚ç¾åœ¨ã®ãƒãƒ¼ã‚¸ãƒ§ãƒ³:
     python --version
     pause
     exit /b 1
 )
 
-REM ‰¼‘zŠÂ‹«ì¬
-echo [1/5] ‰¼‘zŠÂ‹«‚ðì¬‚µ‚Ä‚¢‚Ü‚·...
-python -m venv venv
+REM venv ãƒ‘ã‚¹è¨­å®šï¼ˆWindows ãƒ­ãƒ³ã‚°ãƒ‘ã‚¹å•é¡Œå›žé¿ï¼‰
+set "VENV_DIR=%USERPROFILE%\.nb_tech_venv"
+
+REM ä»®æƒ³ç’°å¢ƒä½œæˆ
+echo [1/5] ä»®æƒ³ç’°å¢ƒã‚’ä½œæˆã—ã¦ã„ã¾ã™...
+echo   å ´æ‰€: %VENV_DIR%
+python -m venv "%VENV_DIR%"
 if errorlevel 1 (
-    echo ƒGƒ‰[: ‰¼‘zŠÂ‹«‚Ìì¬‚ÉŽ¸”s‚µ‚Ü‚µ‚½B
+    echo ã‚¨ãƒ©ãƒ¼: ä»®æƒ³ç’°å¢ƒã®ä½œæˆã«å¤±æ•—ã—ã¾ã—ãŸã€‚
     pause
     exit /b 1
 )
-call venv\Scripts\activate
+call "%VENV_DIR%\Scripts\activate"
 
-REM ƒpƒbƒP[ƒWƒCƒ“ƒXƒg[ƒ‹
+REM ãƒ‘ãƒƒã‚±ãƒ¼ã‚¸ã‚¤ãƒ³ã‚¹ãƒˆãƒ¼ãƒ«
 echo.
-echo [2/5] ƒpƒbƒP[ƒW‚ðƒCƒ“ƒXƒg[ƒ‹‚µ‚Ä‚¢‚Ü‚·...
+echo [2/5] ãƒ‘ãƒƒã‚±ãƒ¼ã‚¸ã‚’ã‚¤ãƒ³ã‚¹ãƒˆãƒ¼ãƒ«ã—ã¦ã„ã¾ã™...
 pip install -r requirements.txt
 if errorlevel 1 (
-    echo ƒGƒ‰[: ƒpƒbƒP[ƒW‚ÌƒCƒ“ƒXƒg[ƒ‹‚ÉŽ¸”s‚µ‚Ü‚µ‚½B
+    echo ã‚¨ãƒ©ãƒ¼: ãƒ‘ãƒƒã‚±ãƒ¼ã‚¸ã®ã‚¤ãƒ³ã‚¹ãƒˆãƒ¼ãƒ«ã«å¤±æ•—ã—ã¾ã—ãŸã€‚
     pause
     exit /b 1
 )
 
-REM –„‚ßž‚Ýƒ‚ƒfƒ‹Ž–‘Oƒ_ƒEƒ“ƒ[ƒh (UX-5)
+REM åŸ‹ã‚è¾¼ã¿ãƒ¢ãƒ‡ãƒ«äº‹å‰ãƒ€ã‚¦ãƒ³ãƒ­ãƒ¼ãƒ‰ (UX-5)
 echo.
-echo [3/5] AIƒ‚ƒfƒ‹‚ðƒ_ƒEƒ“ƒ[ƒh‚µ‚Ä‚¢‚Ü‚·i–ñ2GBA”•ª‚©‚©‚è‚Ü‚·j...
+echo [3/5] AIãƒ¢ãƒ‡ãƒ«ã‚’ãƒ€ã‚¦ãƒ³ãƒ­ãƒ¼ãƒ‰ã—ã¦ã„ã¾ã™ï¼ˆç´„2GBã€æ™‚é–“ãŒã‹ã‹ã‚Šã¾ã™ï¼‰...
 python -c "from llama_index.embeddings.huggingface import HuggingFaceEmbedding; HuggingFaceEmbedding(model_name='intfloat/multilingual-e5-large', cache_folder='./models')"
 if errorlevel 1 (
-    echo Œx: AIƒ‚ƒfƒ‹‚Ìƒ_ƒEƒ“ƒ[ƒh‚ÉŽ¸”s‚µ‚Ü‚µ‚½B‰‰ñ‹N“®Žž‚ÉŽ©“®ƒ_ƒEƒ“ƒ[ƒh‚³‚ê‚Ü‚·B
+    echo è­¦å‘Š: AIãƒ¢ãƒ‡ãƒ«ã®ãƒ€ã‚¦ãƒ³ãƒ­ãƒ¼ãƒ‰ã«å¤±æ•—ã—ã¾ã—ãŸã€‚åˆå›žèµ·å‹•æ™‚ã«è‡ªå‹•ãƒ€ã‚¦ãƒ³ãƒ­ãƒ¼ãƒ‰ã•ã‚Œã¾ã™ã€‚
     pause
 )
 
-REM OllamaŠm”F (UX-3 ‰ü‘P)
+REM Ollamaç¢ºèª (UX-3 æ”¹å–„)
 echo.
-echo [4/5] Ollama ‚ÌŠm”F
+echo [4/5] Ollama ã®ç¢ºèª
 echo -----------------------------------------------
-echo Ollama ‚Í‰ñ“š¶¬‚É•K—v‚ÈLLMƒGƒ“ƒWƒ“‚Å‚·B
+echo Ollama ã¯å›žç­”ç”Ÿæˆã«å¿…è¦ãªLLMã‚¨ãƒ³ã‚¸ãƒ³ã§ã™ã€‚
 echo.
-echo ‚Ü‚¾ƒCƒ“ƒXƒg[ƒ‹‚µ‚Ä‚¢‚È‚¢ê‡:
-echo   1. https://ollama.ai/download ‚ðŠJ‚­
-echo   2. ƒ_ƒEƒ“ƒ[ƒh‚µ‚ÄƒCƒ“ƒXƒg[ƒ‹‚·‚é
-echo   3. Ollama ‚ð‹N“®‚·‚é
+echo ã¾ã ã‚¤ãƒ³ã‚¹ãƒˆãƒ¼ãƒ«ã—ã¦ã„ãªã„å ´åˆ:
+echo   1. https://ollama.ai/download ã‚’é–‹ã
+echo   2. ãƒ€ã‚¦ãƒ³ãƒ­ãƒ¼ãƒ‰ã—ã¦ã‚¤ãƒ³ã‚¹ãƒˆãƒ¼ãƒ«ã™ã‚‹
+echo   3. Ollama ã‚’èµ·å‹•ã™ã‚‹
 echo.
-echo €”õ‚ª‚Å‚«‚½‚ç”CˆÓ‚ÌƒL[‚ð‰Ÿ‚µ‚Ä‚­‚¾‚³‚¢B
+echo æº–å‚™ãŒã§ããŸã‚‰ã€ä»»æ„ã®ã‚­ãƒ¼ã‚’æŠ¼ã—ã¦ãã ã•ã„ã€‚
 echo -----------------------------------------------
 pause >nul
 
-REM LLMƒ‚ƒfƒ‹ƒ_ƒEƒ“ƒ[ƒh
+REM LLMãƒ¢ãƒ‡ãƒ«ãƒ€ã‚¦ãƒ³ãƒ­ãƒ¼ãƒ‰
 echo.
-echo [5/5] LLMƒ‚ƒfƒ‹‚ðƒ_ƒEƒ“ƒ[ƒh‚µ‚Ä‚¢‚Ü‚·...
+echo [5/5] LLMãƒ¢ãƒ‡ãƒ«ã‚’ãƒ€ã‚¦ãƒ³ãƒ­ãƒ¼ãƒ‰ã—ã¦ã„ã¾ã™...
 ollama pull llama3.1:8b
 if errorlevel 1 (
     echo.
-    echo Œx: LLMƒ‚ƒfƒ‹‚Ìƒ_ƒEƒ“ƒ[ƒh‚ÉŽ¸”s‚µ‚Ü‚µ‚½B
-    echo Ollama ‚ª‹N“®‚µ‚Ä‚¢‚é‚©Šm”F‚µ‚Ä‚­‚¾‚³‚¢B
-    echo ¦ ƒAƒvƒŠ‚Ì•¶‘ŒŸõ‹@”\‚ÍŽg‚¦‚Ü‚·‚ªA‰ñ“š¶¬‚É‚ÍOllama‚ª•K—v‚Å‚·B
+    echo è­¦å‘Š: LLMãƒ¢ãƒ‡ãƒ«ã®ãƒ€ã‚¦ãƒ³ãƒ­ãƒ¼ãƒ‰ã«å¤±æ•—ã—ã¾ã—ãŸã€‚
+    echo Ollama ãŒèµ·å‹•ã—ã¦ã„ã‚‹ã‹ç¢ºèªã—ã¦ãã ã•ã„ã€‚
+    echo â€» ã‚¢ãƒ—ãƒªã®æ–‡æ›¸æ¤œç´¢æ©Ÿèƒ½ã¯ä½¿ãˆã¾ã™ãŒã€å›žç­”ç”Ÿæˆã«ã¯OllamaãŒå¿…è¦ã§ã™ã€‚
     pause
 )
 
 echo.
 echo ============================================
-echo  ƒZƒbƒgƒAƒbƒvŠ®—¹I
-echo  run.bat ‚ðƒ_ƒuƒ‹ƒNƒŠƒbƒN‚µ‚Ä‹N“®‚µ‚Ä‚­‚¾‚³‚¢
+echo  ã‚»ãƒƒãƒˆã‚¢ãƒƒãƒ—å®Œäº†ï¼
+echo  run.bat ã‚’ãƒ€ãƒ–ãƒ«ã‚¯ãƒªãƒƒã‚¯ã—ã¦èµ·å‹•ã—ã¦ãã ã•ã„
 echo ============================================
 pause
