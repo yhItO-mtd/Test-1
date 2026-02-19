@@ -1,90 +1,90 @@
-﻿@echo off
+@echo off
 chcp 65001 >nul
 cd /d "%~dp0"
 
 echo ============================================
-echo  NB_Tech_Sys - セットアップ
+echo  NB_Tech_Sys - Setup
 echo ============================================
 echo.
 
-REM Python 存在確認 + バージョン検証
+REM Check Python exists and version
 python --version >nul 2>&1
 if errorlevel 1 (
-    echo [エラー] Python が見つかりません。Python 3.10以上をインストールしてください。
+    echo [Error] Python not found. Please install Python 3.10 or later.
     pause
     exit /b 1
 )
 
 python -c "import sys; exit(0 if sys.version_info >= (3, 10) else 1)" >nul 2>&1
 if errorlevel 1 (
-    echo [エラー] Python 3.10以上が必要です。現在のバージョン:
+    echo [Error] Python 3.10 or later is required. Current version:
     python --version
     pause
     exit /b 1
 )
 
-REM venv パス設定
+REM venv path
 set "VENV_DIR=%USERPROFILE%\.nb_tech_venv"
 
-REM 仮想環境作成
-echo [1/5] 仮想環境を作成しています...
-echo   場所: %VENV_DIR%
+REM Create virtual environment
+echo [1/5] Creating virtual environment...
+echo   Location: %VENV_DIR%
 python -m venv "%VENV_DIR%"
 if errorlevel 1 (
-    echo [エラー] 仮想環境の作成に失敗しました。
+    echo [Error] Failed to create virtual environment.
     pause
     exit /b 1
 )
-call "%VENV_DIR%\Scripts\activate"
+call "%VENV_DIR%\Scripts\activate.bat"
 
-REM パッケージインストール
+REM Install packages
 echo.
-echo [2/5] パッケージをインストールしています...
+echo [2/5] Installing packages...
 pip install -r requirements.txt
 if errorlevel 1 (
-    echo [エラー] パッケージのインストールに失敗しました。
+    echo [Error] Failed to install packages.
     pause
     exit /b 1
 )
 
-REM 埋め込みモデル事前ダウンロード
+REM Download embedding model
 echo.
-echo [3/5] AIモデルをダウンロードしています (約2GB、時間がかかります)...
+echo [3/5] Downloading AI model (about 2GB, this may take a while)...
 python -c "from llama_index.embeddings.huggingface import HuggingFaceEmbedding; HuggingFaceEmbedding(model_name='intfloat/multilingual-e5-large', cache_folder='./models')"
 if errorlevel 1 (
-    echo [警告] AIモデルのダウンロードに失敗しました。初回起動時に自動ダウンロードされます。
+    echo [Warning] AI model download failed. It will be downloaded on first run.
     pause
 )
 
-REM Ollama確認
+REM Check Ollama
 echo.
-echo [4/5] Ollama の確認
+echo [4/5] Ollama Setup
 echo -----------------------------------------------
-echo Ollama は回答生成に必要なLLMエンジンです。
+echo Ollama is the LLM engine required for answers.
 echo.
-echo まだインストールしていない場合:
-echo   1. https://ollama.ai/download を開く
-echo   2. ダウンロードしてインストールする
-echo   3. Ollama を起動する
+echo If not installed yet:
+echo   1. Open https://ollama.ai/download
+echo   2. Download and install
+echo   3. Start Ollama
 echo.
-echo 準備ができたら、任意のキーを押してください。
+echo Press any key when ready.
 echo -----------------------------------------------
 pause >nul
 
-REM LLMモデルダウンロード
+REM Download LLM model
 echo.
-echo [5/5] LLMモデルをダウンロードしています...
+echo [5/5] Downloading LLM model...
 ollama pull llama3.1:8b
 if errorlevel 1 (
     echo.
-    echo [警告] LLMモデルのダウンロードに失敗しました。
-    echo Ollama が起動しているか確認してください。
+    echo [Warning] LLM model download failed.
+    echo Please make sure Ollama is running.
     pause
 )
 
 echo.
 echo ============================================
-echo  セットアップ完了!
-echo  run.bat をダブルクリックして起動してください。
+echo  Setup complete!
+echo  Double-click run.bat to start the app.
 echo ============================================
 pause
