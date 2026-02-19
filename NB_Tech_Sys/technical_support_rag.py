@@ -225,11 +225,12 @@ def setup_models():
     return True
 
 
+@st.cache_data(ttl=30)
 def check_ollama_status():
-    """Ollama の接続状態とモデル有無を確認する"""
+    """Ollama の接続状態とモデル有無を確認する（30秒キャッシュ）"""
     try:
         req = urllib.request.Request("http://localhost:11434/api/tags")
-        with urllib.request.urlopen(req, timeout=5) as resp:
+        with urllib.request.urlopen(req, timeout=3) as resp:
             data = json.loads(resp.read().decode())
             models = [m["name"] for m in data.get("models", [])]
             model_base = OLLAMA_MODEL.split(":")[0]
@@ -591,6 +592,7 @@ with st.sidebar:
                 "スキャン画像のみのPDF等は対応していません。"
             )
 
+        need_rerun = False
         if new_doc_parts:
             with st.spinner("インデックス構築中..."):
                 try:
@@ -629,11 +631,15 @@ with st.sidebar:
                         st.session_state.selected_sources.add(name)
 
                     persist_index_and_metadata()
-                    # アップローダーをクリアして再描画
                     st.session_state.uploader_key += 1
-                    st.rerun()
+                    need_rerun = True
                 except Exception as e:
                     st.error(f"インデックス構築エラー: {e}")
+
+        # st.rerun() は spinner / try-except の外で呼ぶ
+        # （spinner 内で呼ぶと RerunException がコンテキストを壊し接続エラーになる）
+        if need_rerun:
+            st.rerun()
 
     # ソース一覧（チェックボックス + 個別削除）
     if st.session_state.documents:
@@ -673,7 +679,7 @@ with st.sidebar:
             st.session_state.failed_files.discard(doc_to_remove)
 
             if st.session_state.documents:
-                # 残りのドキュメントでインデックスを再構築
+                # メタデータを更新（インデックス内の孤立ノードはフィルタで除外）
                 persist_index_and_metadata()
             else:
                 # 全件削除された場合
