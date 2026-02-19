@@ -330,19 +330,28 @@ Path(_embed_marker).write_text(EMBED_MODEL, encoding="utf-8")
 # 保存済みインデックスの自動読み込み
 if st.session_state.index is None and Path(STORAGE_DIR).exists():
     try:
-        storage_context = StorageContext.from_defaults(
-            persist_dir=STORAGE_DIR
-        )
-        st.session_state.index = load_index_from_storage(storage_context)
-        if Path(METADATA_PATH).exists():
-            with open(METADATA_PATH, "r", encoding="utf-8") as f:
-                st.session_state.documents = json.load(f)
-        # 全ソースを選択状態にする
-        st.session_state.selected_sources = {
-            d["name"] for d in st.session_state.documents
-        }
+        with st.spinner("保存済みデータを読み込み中..."):
+            storage_context = StorageContext.from_defaults(
+                persist_dir=STORAGE_DIR
+            )
+            st.session_state.index = load_index_from_storage(storage_context)
+            if Path(METADATA_PATH).exists():
+                with open(METADATA_PATH, "r", encoding="utf-8") as f:
+                    st.session_state.documents = json.load(f)
+            # 全ソースを選択状態にする
+            st.session_state.selected_sources = {
+                d["name"] for d in st.session_state.documents
+            }
     except Exception:
-        pass
+        st.warning(
+            "保存済みデータの読み込みに失敗しました。\n\n"
+            "ソースを再度アップロードしてください。"
+        )
+        # 破損したストレージを除去して次回起動を正常にする
+        if Path(STORAGE_DIR).exists():
+            shutil.rmtree(STORAGE_DIR)
+            os.makedirs(STORAGE_DIR, exist_ok=True)
+            Path(_embed_marker).write_text(EMBED_MODEL, encoding="utf-8")
 
 # チャット履歴の復元（インデックス読み込みとは独立して実行）
 if not st.session_state.chat_history and Path(CHAT_HISTORY_PATH).exists():
@@ -914,10 +923,17 @@ if st.session_state.index is not None:
                             status.update(label=done_msg, state="complete", expanded=False)
                 sources = collect_sources(response)
 
+                answer_text = response.response
+                if not answer_text:
+                    answer_text = (
+                        "回答を生成できませんでした。\n\n"
+                        "質問の表現を変えるか、別のソースを追加してみてください。"
+                    )
+
                 st.session_state.chat_history.append(
                     {
                         "role": "assistant",
-                        "content": response.response,
+                        "content": answer_text,
                         "sources": sources,
                         "timestamp": timestamp,
                     }
