@@ -45,8 +45,8 @@ CHAT_HISTORY_PATH = str(BASE_DIR / "storage" / "chat_history.json")
 MODELS_DIR = str(BASE_DIR / "models")
 
 # LLM モデル設定（メモリに合わせて変更可）
-# llama3.2:1b ≈ 3 GiB / llama3.2:3b ≈ 6 GiB / llama3.1:8b ≈ 20 GiB
-OLLAMA_MODEL = "llama3.2:1b"
+# qwen2.5:1.5b ≈ 3 GiB / qwen2.5:3b ≈ 5 GiB / qwen2.5:7b ≈ 8 GiB
+OLLAMA_MODEL = "qwen2.5:3b"
 
 # 埋め込みモデル設定
 # multilingual-e5-base ≈ 1 GiB / multilingual-e5-large ≈ 2 GiB
@@ -210,10 +210,11 @@ def setup_models():
     Settings.llm = Ollama(
         model=OLLAMA_MODEL,
         request_timeout=300.0,
-        temperature=0.0,
-        num_ctx=2048,
+        temperature=0.1,
+        num_ctx=4096,
         system_prompt=(
-            "あなたは製品の技術サポート専門AIです。\n"
+            "あなたは製品の技術サポート専門AIです。"
+            "必ず自然な日本語で回答してください。\n"
             "以下のルールに従ってください：\n"
             "1. 提供された文書の情報のみを使用する\n"
             "2. 不明な場合は「文書に記載がありません」と回答\n"
