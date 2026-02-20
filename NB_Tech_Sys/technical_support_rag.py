@@ -328,7 +328,9 @@ os.makedirs(STORAGE_DIR, exist_ok=True)
 Path(_embed_marker).write_text(EMBED_MODEL, encoding="utf-8")
 
 # 保存済みインデックスの自動読み込み
-if st.session_state.index is None and Path(STORAGE_DIR).exists():
+# METADATA_PATH はインデックス構築時のみ作成されるため、
+# 空ディレクトリ（削除後の再作成等）では読み込みをスキップする
+if st.session_state.index is None and Path(METADATA_PATH).exists():
     try:
         with st.spinner("保存済みデータを読み込み中..."):
             storage_context = StorageContext.from_defaults(
