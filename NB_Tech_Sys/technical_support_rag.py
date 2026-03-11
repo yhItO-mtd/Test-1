@@ -506,14 +506,14 @@ def build_query_engine():
             condition=FilterCondition.OR,
         )
         return st.session_state.index.as_query_engine(
-            similarity_top_k=5,
+            similarity_top_k=3,
             response_mode="compact",
             filters=metadata_filters,
             streaming=True,
         )
 
     return st.session_state.index.as_query_engine(
-        similarity_top_k=5,
+        similarity_top_k=3,
         response_mode="compact",
         streaming=True,
     )
@@ -741,21 +741,18 @@ if st.session_state.index is not None:
         action_prompts = {
             "📝 要約を生成": (
                 "登録されている文書の主要な内容を、"
-                "200文字程度で簡潔に要約してください。"
+                "簡潔に要約してください。"
             ),
             "❓ FAQ を作成": (
                 "文書に基づいて、想定されるよくある質問（FAQ）と"
                 "その回答を作成してください。"
-                "各回答は200文字程度に収めてください。"
             ),
             "📋 仕様一覧": (
                 "製品の主な仕様・スペックを箇条書きでまとめてください。"
-                "全体で200文字程度に収めてください。"
             ),
             "🔧 トラブル対応": (
                 "よくあるトラブル・エラーとその対処法を"
                 "一覧にしてください。"
-                "全体で200文字程度に収めてください。"
             ),
         }
 
