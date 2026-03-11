@@ -37,9 +37,10 @@ if errorlevel 1 (
 )
 call "%VENV_DIR%\Scripts\activate.bat"
 
-REM Install packages
+REM Upgrade pip
 echo.
 echo [2/5] Installing packages...
+pip install --upgrade pip >nul 2>&1
 pip install -r requirements.txt
 if errorlevel 1 (
     echo [Error] Failed to install packages.
