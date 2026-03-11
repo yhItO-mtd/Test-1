@@ -509,11 +509,13 @@ def build_query_engine():
             similarity_top_k=5,
             response_mode="compact",
             filters=metadata_filters,
+            streaming=True,
         )
 
     return st.session_state.index.as_query_engine(
         similarity_top_k=5,
         response_mode="compact",
+        streaming=True,
     )
 
 
@@ -906,27 +908,16 @@ if st.session_state.index is not None:
                     }
                 )
             else:
-                # 回答生成中の表示
-                status_msg = (
-                    f"「{studio_label}」を生成中..."
-                    if studio_label
-                    else "回答を生成中..."
-                )
                 with chat_col:
                     with st.chat_message("assistant"):
-                        with st.status(status_msg, expanded=True) as status:
-                            st.write("📄 関連する文書を検索中...")
-                            response = query_engine.query(prompt)
-                            st.write("✅ 回答を取得しました")
-                            done_msg = (
-                                f"「{studio_label}」生成完了"
-                                if studio_label
-                                else "回答完了"
-                            )
-                            status.update(label=done_msg, state="complete", expanded=False)
+                        # ストリーミング: トークンをリアルタイム表示
+                        response = query_engine.query(prompt)
+                        answer_text = st.write_stream(
+                            response.response_gen
+                        )
+
                 sources = collect_sources(response)
 
-                answer_text = response.response
                 if not answer_text:
                     answer_text = (
                         "回答を生成できませんでした。\n\n"
