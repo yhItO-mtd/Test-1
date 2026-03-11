@@ -192,6 +192,7 @@ ICON_MAP = {
     "DOCX": "📘",
     "PPTX": "📊",
     "TXT": "📄",
+    "MD": "📝",
 }
 
 
@@ -440,7 +441,7 @@ def load_document(uploaded_file):
             return extract_text_from_docx(uploaded_file)
         elif file_extension == ".pptx":
             return extract_text_from_pptx(uploaded_file)
-        elif file_extension == ".txt":
+        elif file_extension in (".txt", ".md"):
             uploaded_file.seek(0)
             text = uploaded_file.read().decode("utf-8")
             if not text.strip():
@@ -567,7 +568,7 @@ with st.sidebar:
     # ファイルアップロード
     uploaded_files = st.file_uploader(
         "ソースを追加",
-        type=["pdf", "docx", "pptx", "txt"],
+        type=["pdf", "docx", "pptx", "txt", "md"],
         accept_multiple_files=True,
         help="PDF、Word、PowerPoint、テキストファイルに対応",
         key=f"file_uploader_{st.session_state.uploader_key}",
@@ -1001,7 +1002,7 @@ else:
         st.markdown("#### 使い方")
         st.markdown(
             """
-1. **サイドバーからソースを追加** — PDF、Word、PowerPoint、テキスト
+1. **サイドバーからソースを追加** — PDF、Word、PowerPoint、テキスト、Markdown
 2. **チェックボックスで対象を選択** — 質問に使うソースを絞り込み
 3. **チャットで質問** — 製品仕様、操作手順、トラブル対処など
 4. **スタジオで一括生成** — 要約、FAQ、仕様一覧をワンクリック
@@ -1009,7 +1010,7 @@ else:
         )
 
         st.markdown("#### 対応フォーマット")
-        fmt_col1, fmt_col2, fmt_col3, fmt_col4 = st.columns(4)
+        fmt_col1, fmt_col2, fmt_col3, fmt_col4, fmt_col5 = st.columns(5)
         with fmt_col1:
             st.markdown("📕 **PDF**\n\n取扱説明書")
         with fmt_col2:
@@ -1018,3 +1019,5 @@ else:
             st.markdown("📘 **DOCX**\n\n技術ノート")
         with fmt_col4:
             st.markdown("📄 **TXT**\n\nテキスト資料")
+        with fmt_col5:
+            st.markdown("📝 **MD**\n\nMarkdown")
