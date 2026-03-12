@@ -646,6 +646,13 @@ with st.sidebar:
                                 "type": Path(name).suffix[1:].upper(),
                                 "uploaded_at": datetime.now().isoformat(),
                                 "parts": len(parts),
+                                "texts": [
+                                    {
+                                        "text": p["text"],
+                                        "metadata": p["metadata"],
+                                    }
+                                    for p in parts
+                                ],
                             }
                         )
                         st.session_state.selected_sources.add(name)
@@ -687,6 +694,36 @@ with st.sidebar:
                     help=f"{doc['name']} を削除",
                 ):
                     doc_to_remove = doc["name"]
+
+            # ソース内容の閲覧
+            texts = doc.get("texts", [])
+            if texts:
+                with st.expander(
+                    f"📖 内容を表示（{doc['parts']}パート）",
+                    expanded=False,
+                ):
+                    for pi, part in enumerate(texts):
+                        meta = part.get("metadata", {})
+                        page = meta.get("page")
+                        slide = meta.get("slide")
+                        if page:
+                            st.caption(
+                                f"ページ {page}"
+                                f" / {meta.get('total_pages', '?')}"
+                            )
+                        elif slide:
+                            st.caption(
+                                f"スライド {slide}"
+                                f" / {meta.get('total_slides', '?')}"
+                            )
+                        st.text_area(
+                            f"part_{pi}",
+                            part["text"],
+                            height=150,
+                            key=f"view_{doc['name']}_{pi}",
+                            label_visibility="collapsed",
+                            disabled=True,
+                        )
 
         # 個別削除の実行（ループ外で処理）
         if doc_to_remove:
