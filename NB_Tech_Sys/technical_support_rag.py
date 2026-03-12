@@ -912,8 +912,9 @@ if st.session_state.index is not None:
             else:
                 with chat_col:
                     with st.chat_message("assistant"):
+                        with st.spinner("回答を作成中..."):
+                            response = query_engine.query(prompt)
                         # ストリーミング: トークンをリアルタイム表示
-                        response = query_engine.query(prompt)
                         answer_text = st.write_stream(
                             response.response_gen
                         )
