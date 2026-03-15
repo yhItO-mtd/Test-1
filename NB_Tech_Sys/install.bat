@@ -75,7 +75,7 @@ pause >nul
 REM Download LLM model
 echo.
 echo [5/5] Downloading LLM model...
-ollama pull qwen2.5:3b
+ollama pull qwen3.5:4b
 if errorlevel 1 (
     echo.
     echo [Warning] LLM model download failed.
