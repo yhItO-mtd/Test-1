@@ -53,8 +53,8 @@ OLLAMA_MODEL = "qwen3.5:4b"
 CPU_THREADS = psutil.cpu_count(logical=False) or os.cpu_count() or 4
 
 # 埋め込みモデル設定
-# multilingual-e5-base ≈ 1 GiB / multilingual-e5-large ≈ 2 GiB
-EMBED_MODEL = "intfloat/multilingual-e5-base"
+# BAAI/bge-m3 ≈ 2 GiB（CJK特化、8192トークン対応）
+EMBED_MODEL = "BAAI/bge-m3"
 
 # ---------------------------------------------------------------------------
 # ページ設定 & カスタムCSS

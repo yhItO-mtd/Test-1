@@ -223,7 +223,7 @@ def main():
     doc.add_heading('AI モデル', level=2)
     model_rows = [
         ['qwen3.5:4b', 'LLM（大規模言語モデル）', '約2.5GB', '質問に対する回答を生成。Ollama 経由でダウンロード・実行。'],
-        ['intfloat/multilingual-e5-base', '埋め込みモデル', '約1GB', 'テキストをベクトルに変換。多言語対応（日本語含む）。HuggingFace からダウンロード。'],
+        ['BAAI/bge-m3', '埋め込みモデル', '約2GB', 'テキストをベクトルに変換。CJK（中日英）特化、8192トークン対応。HuggingFace からダウンロード。'],
     ]
     add_styled_table(doc, ['モデル名', '種別', 'サイズ', '説明'], model_rows, [4.5, 3.5, 2, 6])
 
@@ -262,7 +262,7 @@ def main():
     doc.add_heading('AI モデル層（Ollama + HuggingFace）', level=2)
     doc.add_paragraph(
         'Ollama が qwen3.5:4b モデルを実行し、検索結果をコンテキストとして回答を生成します。'
-        '埋め込みには HuggingFace の multilingual-e5-base を使用し、多言語に対応しています。'
+        '埋め込みには HuggingFace の BGE-M3 を使用し、CJK（中国語・日本語・英語）に特化した高精度な検索を実現しています。'
     )
     ai_details = [
         'LLM 温度パラメータ: 0.1（ほぼ確定的な応答）',
@@ -285,7 +285,7 @@ def main():
         ['2', '仮想環境作成', '%USERPROFILE%\\.nb_tech_venv に Python 仮想環境を構築'],
         ['3', 'pip アップグレード', 'pip 自体を最新版に更新して依存解決エラーを防止'],
         ['4', 'パッケージインストール', 'requirements.txt から全依存ライブラリをインストール'],
-        ['5', '埋め込みモデル DL', 'multilingual-e5-base（約1GB）を事前ダウンロード'],
+        ['5', '埋め込みモデル DL', 'BGE-M3（約2GB）を事前ダウンロード'],
         ['6', 'Ollama 確認', 'Ollama のインストール状況を確認、案内を表示'],
         ['7', 'LLM モデル DL', 'qwen3.5:4b（約2.5GB）を Ollama 経由でダウンロード'],
     ]

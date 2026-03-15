@@ -50,8 +50,8 @@ if errorlevel 1 (
 
 REM Download embedding model
 echo.
-echo [3/5] Downloading AI model (about 1GB, this may take a while)...
-python -c "from llama_index.embeddings.huggingface import HuggingFaceEmbedding; HuggingFaceEmbedding(model_name='intfloat/multilingual-e5-base', cache_folder='./models')"
+echo [3/5] Downloading AI model (about 2GB, this may take a while)...
+python -c "from llama_index.embeddings.huggingface import HuggingFaceEmbedding; HuggingFaceEmbedding(model_name='BAAI/bge-m3', cache_folder='./models')"
 if errorlevel 1 (
     echo [Warning] AI model download failed. It will be downloaded on first run.
     pause
