@@ -46,8 +46,8 @@ CHAT_HISTORY_PATH = str(BASE_DIR / "storage" / "chat_history.json")
 MODELS_DIR = str(BASE_DIR / "models")
 
 # LLM モデル設定（メモリに合わせて変更可）
-# qwen3.5:2b ≈ 1.5 GiB / qwen3.5:4b ≈ 2.5 GiB / qwen3.5:9b ≈ 5 GiB
-OLLAMA_MODEL = "qwen3.5:4b"
+# qwen2.5:3b ≈ 2 GiB / qwen2.5:7b ≈ 4.5 GiB
+OLLAMA_MODEL = "qwen2.5:3b"
 
 # CPU物理コア数を取得（ハイパースレッドを除いた実コア数が最適）
 CPU_THREADS = psutil.cpu_count(logical=False) or os.cpu_count() or 4
