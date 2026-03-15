@@ -6,7 +6,7 @@ NotebookLM 風の 3 パネルレイアウト（ソース｜チャット｜スタ
 
 - **NotebookLM 風 UI**: ソース管理・チャット・スタジオの 3 パネル構成
 - **マルチフォーマット対応**: PDF / DOCX / PPTX / TXT / MD をドラッグ＆ドロップ
-- **高品質な日本語**: Qwen2.5 (3B) による自然な日本語回答 + multilingual-e5 ベクトル検索
+- **高品質な日本語**: Qwen3.5 (4B) による自然な日本語回答 + multilingual-e5 ベクトル検索
 - **ローカル LLM**: Ollama 経由でローカル実行（API キー不要）
 - **ソース個別管理**: チェックで参照対象を選択、✕ ボタンで個別削除
 - **スタジオ一括生成**: 要約・FAQ・仕様一覧・トラブル対応をワンクリック生成
@@ -30,11 +30,11 @@ NotebookLM 風の 3 パネルレイアウト（ソース｜チャット｜スタ
 
 | コンポーネント | メモリ使用量 |
 |--------------|------------|
-| Ollama + qwen2.5:3b | 約 5 GB |
+| Ollama + qwen3.5:4b | 約 2.5 GB |
 | 埋め込みモデル (multilingual-e5-base) | 約 1 GB |
 | PyTorch ランタイム | 約 0.5 - 2 GB |
 | Streamlit + Python | 約 0.3 - 0.5 GB |
-| **合計（概算）** | **約 7 - 9 GB** |
+| **合計（概算）** | **約 4.5 - 6.5 GB** |
 
 > **注意**: アップロードするドキュメントの量が多い場合、インデックス構築時に追加メモリが必要です。大量のドキュメント（100 ファイル以上）を扱う場合は 16 GB 以上を推奨します。
 
@@ -54,7 +54,7 @@ NotebookLM 風の 3 パネルレイアウト（ソース｜チャット｜スタ
 | UI | Streamlit |
 | 埋め込みモデル | intfloat/multilingual-e5-base（約 1 GB） |
 | ベクトルストア | LlamaIndex VectorStoreIndex（ローカル永続化） |
-| LLM | Ollama - qwen2.5:3b（デフォルト、約 5 GB） |
+| LLM | Ollama - qwen3.5:4b（デフォルト、約 2.5 GB） |
 | RAG フレームワーク | LlamaIndex |
 | ドキュメント解析 | PyPDF2 / python-docx / python-pptx |
 
@@ -70,9 +70,9 @@ NotebookLM 風の 3 パネルレイアウト（ソース｜チャット｜スタ
 ollama --version
 ```
 
-> LLM モデル（qwen2.5:3b）はアプリ初回起動時に自動でダウンロードされます。手動で事前にダウンロードする場合:
+> LLM モデル（qwen3.5:4b）はアプリ初回起動時に自動でダウンロードされます。手動で事前にダウンロードする場合:
 > ```bash
-> ollama pull qwen2.5:3b
+> ollama pull qwen3.5:4b
 > ```
 
 ### 2. Python 環境のセットアップ
